@@ -573,37 +573,45 @@ def _cached_collect(term, search_type, source_names, limit, expansions_key, time
 # toggling a checkbox), which is what Streamlit's rerun-the-whole-script model
 # would otherwise trigger. Results persist in session_state across reruns.
 if run and active_term:
-    search_type = _TYPE_MAP.get(search_type_label, "keyword")
-    expansions = expand_keywords(active_term, search_type) if use_expand else []
-    context_hints = [h for h in (d_loc, d_org) if h and h.strip()]
-    exclude_terms = [t.strip() for t in d_exclude.split(",") if t.strip()]
+    try:
+        search_type = _TYPE_MAP.get(search_type_label, "keyword")
+        expansions = expand_keywords(active_term, search_type) if use_expand else []
+        context_hints = [h for h in (d_loc, d_org) if h and h.strip()]
+        exclude_terms = [t.strip() for t in d_exclude.split(",") if t.strip()]
 
-    spinner_msg = f"Fetching intelligence report for '{active_term}' ({time_range})"
-    if use_gdelt and time_range == "All Available Data":
-        spinner_msg += " — sweeping the GDELT 2017→now archive for full historical depth, ~20-30s"
-    with st.spinner(spinner_msg + "..."):
-        fetched_df, fetched_errors = _cached_collect(
-            active_term, search_type, tuple(sorted(sources.keys())), limit,
-            tuple(expansions), time_range, tuple(context_hints), tuple(exclude_terms),
-            _sources=sources, _expansions=expansions,
-            _context_hints=context_hints, _exclude_terms=exclude_terms,
-        )
-    fetched_stats = summarize(fetched_df)
+        spinner_msg = f"Fetching intelligence report for '{active_term}' ({time_range})"
+        if use_gdelt and time_range == "All Available Data":
+            spinner_msg += " — sweeping the GDELT 2017→now archive for full historical depth, ~20-30s"
+        with st.spinner(spinner_msg + "..."):
+            fetched_df, fetched_errors = _cached_collect(
+                active_term, search_type, tuple(sorted(sources.keys())), limit,
+                tuple(expansions), time_range, tuple(context_hints), tuple(exclude_terms),
+                _sources=sources, _expansions=expansions,
+                _context_hints=context_hints, _exclude_terms=exclude_terms,
+            )
+        fetched_stats = summarize(fetched_df)
 
-    if not fetched_df.empty:
-        emotion_counts = fetched_df["emotion"].value_counts().to_dict()
-        dominant_emotion = fetched_df["emotion"].mode().iat[0] if emotion_counts else "neutral"
-        theme_words, _theme_tags = extract_hot_topics(fetched_df["text"].tolist(), extra_stop=active_term.split(), top_n=15)
-        storage.save_run(active_term, fetched_stats, list(sources.keys()), dominant_emotion, emotion_counts, theme_words)
+        if not fetched_df.empty:
+            try:
+                emotion_counts = fetched_df["emotion"].value_counts().to_dict()
+                dominant_emotion = fetched_df["emotion"].mode().iat[0] if emotion_counts else "neutral"
+                theme_words, _theme_tags = extract_hot_topics(fetched_df["text"].tolist(), extra_stop=active_term.split(), top_n=15)
+                storage.save_run(active_term, fetched_stats, list(sources.keys()), dominant_emotion, emotion_counts, theme_words)
+            except Exception:
+                pass  # trend-history logging is a nice-to-have, never block the report on it
 
-    st.session_state["last_report"] = {
-        "term": active_term,
-        "time_range": time_range,
-        "df": fetched_df,
-        "errors": fetched_errors,
-        "stats": fetched_stats,
-        "fetched_at": dt.datetime.now().strftime("%b %d, %Y · %H:%M"),
-    }
+        st.session_state["last_report"] = {
+            "term": active_term,
+            "time_range": time_range,
+            "df": fetched_df,
+            "errors": fetched_errors,
+            "stats": fetched_stats,
+            "fetched_at": dt.datetime.now().strftime("%b %d, %Y · %H:%M"),
+        }
+    except Exception as e:
+        # Never let a fetch/processing failure crash the whole app — surface it
+        # and keep whatever report (if any) was already on screen.
+        st.error(f"⚠️ This run hit an unexpected error and was aborted: {type(e).__name__}: {e}\n\nYour previous report (if any) is still shown below. Try narrowing the sources or search, or click Run again.")
 elif run and not active_term:
     st.warning("⚠️ Enter a name, hashtag, or handle in the sidebar before running a report.")
 

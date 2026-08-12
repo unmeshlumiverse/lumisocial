@@ -141,74 +141,110 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
 
     # ── Disambiguation: exclude terms (hard drop) ────────────────────────────
     # Answers to "who is NOT this person" — a known namesake, movie, unrelated
-    # scandal, etc. Any row mentioning one is dropped outright.
-    exclude_terms = [t.strip().lower() for t in (exclude_terms or []) if t and t.strip()]
-    if exclude_terms and not df.empty:
-        exclude_mask = df.apply(lambda r: any(x in _searchable(r) for x in exclude_terms), axis=1)
-        df = df[~exclude_mask].reset_index(drop=True)
+    # scandal, etc. Any row mentioning one is dropped outright. Best-effort: if
+    # this fails for any reason, keep going with the unfiltered rows rather
+    # than losing the whole report over an optional refinement.
+    try:
+        exclude_terms = [t.strip().lower() for t in (exclude_terms or []) if t and t.strip()]
+        if exclude_terms and not df.empty:
+            exclude_mask = df.apply(lambda r: any(x in _searchable(r) for x in exclude_terms), axis=1)
+            df = df[~exclude_mask].reset_index(drop=True)
+    except Exception as e:
+        errors["__exclude_filter_error__"] = str(e)
 
     # ── Disambiguation: context hints (soft boost, never drops rows) ─────────
     # Answers to "where / what org is this person tied to" — a state, city,
     # party, company. We can't require it (most headlines omit it) so we just
     # flag matches; the UI ranks/badges them as higher-confidence.
-    context_hints = [c.strip().lower() for c in (context_hints or []) if c and c.strip()]
-    if not df.empty:
-        if context_hints:
-            df["context_match"] = df.apply(lambda r: any(c in _searchable(r) for c in context_hints), axis=1)
-        else:
-            df["context_match"] = False
+    try:
+        context_hints = [c.strip().lower() for c in (context_hints or []) if c and c.strip()]
+        if not df.empty:
+            if context_hints:
+                df["context_match"] = df.apply(lambda r: any(c in _searchable(r) for c in context_hints), axis=1)
+            else:
+                df["context_match"] = False
+    except Exception as e:
+        errors["__context_hint_error__"] = str(e)
+        df["context_match"] = False
 
     # ── Time range filter ─────────────────────────────────────────────────────
     # Rows with no parseable date are dropped for a specific window (can't verify
     # they belong in it) but kept for "All Available Data".
-    if not df.empty:
-        start, end = time_range_bounds(time_range)
-        parsed = pd.to_datetime(df["created_at"], errors="coerce", utc=True)
-        if start is not None:
-            in_window = parsed.notna() & (parsed >= start) & (parsed <= end)
-            df = df[in_window].reset_index(drop=True)
+    try:
+        if not df.empty:
+            start, end = time_range_bounds(time_range)
+            if start is not None:
+                parsed = pd.to_datetime(df["created_at"], errors="coerce", utc=True)
+                in_window = parsed.notna() & (parsed >= start) & (parsed <= end)
+                df = df[in_window].reset_index(drop=True)
+    except Exception as e:
+        errors["__time_filter_error__"] = str(e)
 
     errors["__post_filter_total__"] = str(len(df))
 
     if df.empty:
         return pd.DataFrame(columns=NORMALIZED_FIELDS + ["sentiment", "score", "source_group", "age_group"]), errors
 
-    # Score every post (batched — efficient for the transformer backend).
-    pairs = score_many(df["text"].tolist())
-    df["sentiment"] = [p[0] for p in pairs]
-    df["score"] = [p[1] for p in pairs]
+    # ── Scoring & enrichment ──────────────────────────────────────────────────
+    # Wrapped as a whole: any single enrichment step failing (a model backend
+    # unavailable on this host, unexpected input shape from a connector, a
+    # pandas edge case) should degrade to a still-usable, if less enriched,
+    # report instead of crashing the entire run.
+    try:
+        # Score every post (batched — efficient for the transformer backend).
+        pairs = score_many(df["text"].tolist())
+        df["sentiment"] = [p[0] for p in pairs]
+        df["score"] = [p[1] for p in pairs]
 
-    # De-dupe and compute a simple "reach" weight (engagement).
-    df = df.drop_duplicates(subset=["platform", "id"]).reset_index(drop=True)
-    df["engagement"] = df["likes"].fillna(0) + df["shares"].fillna(0) + df["replies"].fillna(0)
+        # De-dupe and compute a simple "reach" weight (engagement).
+        df = df.drop_duplicates(subset=["platform", "id"]).reset_index(drop=True)
+        df["engagement"] = df["likes"].fillna(0) + df["shares"].fillna(0) + df["replies"].fillna(0)
 
-    # Source Group / Category
-    df["source_group"] = df["platform"].apply(_assign_source_group)
+        # Source Group / Category
+        df["source_group"] = df["platform"].apply(_assign_source_group)
 
-    # Rough, content-based region/country estimate (NOT real geolocation).
-    df["region"] = df["text"].apply(estimate_region)
-    df["country"] = df["text"].apply(estimate_country)
+        # Rough, content-based region/country estimate (NOT real geolocation).
+        df["region"] = df["text"].apply(estimate_region)
+        df["country"] = df["text"].apply(estimate_country)
 
-    # India state/city estimate (content mentions only, with regional paper fallback).
-    india_loc = df["text"].apply(detect_india_location)
-    df["india_state"] = india_loc.apply(lambda d: d["state"])
-    df["india_city"] = india_loc.apply(lambda d: d["city"])
+        # India state/city estimate (content mentions only, with regional paper fallback).
+        india_loc = df["text"].apply(detect_india_location)
+        df["india_state"] = india_loc.apply(lambda d: d["state"])
+        df["india_city"] = india_loc.apply(lambda d: d["city"])
 
-    # Fallback to regional paper state hint if state not explicitly found in text
-    if "state_hint" in df.columns:
-        df["india_state"] = df.apply(
-            lambda r: r["state_hint"] if (pd.isna(r["india_state"]) and r.get("state_hint") and r["state_hint"] != "National") else r["india_state"],
-            axis=1
-        )
+        # Fallback to regional paper state hint if state not explicitly found in text
+        if "state_hint" in df.columns:
+            df["india_state"] = df.apply(
+                lambda r: r["state_hint"] if (pd.isna(r["india_state"]) and r.get("state_hint") and r["state_hint"] != "National") else r["india_state"],
+                axis=1
+            )
 
-    # If state is identified, set country to India
-    df["country"] = df.apply(lambda r: "India" if pd.notna(r["india_state"]) else r["country"], axis=1)
+        # If state is identified, set country to India
+        df["country"] = df.apply(lambda r: "India" if pd.notna(r["india_state"]) else r["country"], axis=1)
 
-    # Demographics: Age group estimation
-    df["age_group"] = df.apply(lambda r: estimate_age_group(r["text"], r["platform"]), axis=1)
+        # Demographics: Age group estimation
+        df["age_group"] = df.apply(lambda r: estimate_age_group(r["text"], r["platform"]), axis=1)
 
-    # Coarse emotion label (love/joy/anger/hate/fear/sadness/neutral), batched.
-    df["emotion"] = detect_many(df["text"].tolist())
+        # Coarse emotion label (love/joy/anger/hate/fear/sadness/neutral), batched.
+        df["emotion"] = detect_many(df["text"].tolist())
+    except Exception as e:
+        errors["__enrichment_error__"] = f"{type(e).__name__}: {e}"
+        # Minimal-but-safe fallback so the UI (which expects these columns to
+        # always exist) still renders instead of crashing the whole report.
+        df = df.drop_duplicates(subset=["platform", "id"]).reset_index(drop=True)
+        if "sentiment" not in df.columns:
+            df["sentiment"] = "neutral"
+        if "score" not in df.columns:
+            df["score"] = 0.0
+        df["engagement"] = df.get("likes", 0).fillna(0) + df.get("shares", 0).fillna(0) + df.get("replies", 0).fillna(0)
+        df["source_group"] = df["platform"].apply(_assign_source_group)
+        for col, default in (
+            ("region", "Unknown"), ("country", "Unknown"), ("india_state", None),
+            ("india_city", None), ("age_group", "Unknown"), ("emotion", "neutral"),
+            ("context_match", False),
+        ):
+            if col not in df.columns:
+                df[col] = default
 
     return df, errors
 
