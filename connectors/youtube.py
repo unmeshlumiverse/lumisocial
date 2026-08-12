@@ -32,16 +32,38 @@ def _key():
     return key
 
 
-def _find_videos(query, key, max_videos=5):
+def _search_videos(query, key, order, max_videos):
     params = {
         "part": "snippet", "q": query, "type": "video",
-        "order": "relevance", "maxResults": max_videos, "key": key,
+        "order": order, "maxResults": max_videos, "key": key,
     }
     resp = requests.get(SEARCH_URL, params=params, timeout=20)
     resp.raise_for_status()
     items = resp.json().get("items", [])
     return [(it["id"]["videoId"], it["snippet"]["title"]) for it in items
             if it.get("id", {}).get("videoId")]
+
+
+def _find_videos(query, key, max_videos=15):
+    """
+    Pull videos from three different rankings — relevance, most recent, and
+    most-viewed — and dedupe. A relevance-only search keeps surfacing the same
+    handful of old viral clips; mixing in "date" and "viewCount" is what
+    actually gives "whole data" coverage across a person's full history
+    instead of one narrow slice of it.
+    """
+    per_order = max(3, max_videos // 3)
+    seen = {}
+    for order in ("relevance", "date", "viewCount"):
+        try:
+            for vid, title in _search_videos(query, key, order, per_order):
+                if vid not in seen:
+                    seen[vid] = title
+        except Exception:
+            continue
+        if len(seen) >= max_videos:
+            break
+    return list(seen.items())[:max_videos]
 
 
 def _fetch_comments(video_id, video_title, key, max_comments=40):
@@ -76,14 +98,16 @@ def _fetch_comments(video_id, video_title, key, max_comments=40):
     return posts
 
 
-def search_youtube(query, limit=50, max_videos=5):
-    """Find videos matching `query`, then collect their comments as posts."""
+def search_youtube(query, limit=50, max_videos=15):
+    """Find videos matching `query` (across relevance/date/popularity), then
+    collect their comments as posts — the comments are the actual public
+    opinion data; more videos found = more of a person's real history covered."""
     key = _key()
     videos = _find_videos(query, key, max_videos=max_videos)
     if not videos:
         return []
 
-    per_video = max(5, limit // len(videos))
+    per_video = max(10, limit // len(videos))
     posts = []
     for vid, title in videos:
         try:

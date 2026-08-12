@@ -82,13 +82,10 @@ def search_news(query, limit=100, country="IN", lang="en"):
         summary = e.get("summary") or ""
         searchable = f"{title} {summary}".lower()
 
-        # Relevance: exact phrase, all words, OR surname present
-        # For regional politicians the headline might only use the surname
+        # Relevance: BOTH words must be present (exact phrase or all individual words).
+        # Never use surname-only — "Thakare" alone matches Shiv Thakare, Ramvijay Thakare, etc.
         if len(words) >= 2:
-            if not (q_clean.lower() in searchable
-                    or all(w in searchable for w in words)
-                    or (surname and surname in searchable)
-                    or (firstname and firstname in searchable and len(firstname) > 3)):
+            if not (q_clean.lower() in searchable or all(w in searchable for w in words)):
                 continue
 
         source = ""

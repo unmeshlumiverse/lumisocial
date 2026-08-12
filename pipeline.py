@@ -6,12 +6,30 @@ News RSS...) means writing one more connector that returns the same normalized
 dict shape and appending it in `collect`.
 """
 
+import datetime as dt
+
 import pandas as pd
 
 from sentiment import score_sentiment, score_many
 from analysis import estimate_region, estimate_country, detect_india_location
 from emotion import detect_emotion, detect_many
 from demographics import estimate_age_group
+
+TIME_RANGE_WINDOWS = {
+    "Past 24 Hours": dt.timedelta(hours=24),
+    "Past 1 Week": dt.timedelta(days=7),
+    "Past 1 Month": dt.timedelta(days=30),
+    "All Available Data": None,
+}
+
+
+def time_range_bounds(time_range: str):
+    """Return (start_utc, end_utc) for a time_range label, or (None, None) for all-time."""
+    window = TIME_RANGE_WINDOWS.get(time_range)
+    if window is None:
+        return None, None
+    end = dt.datetime.now(dt.timezone.utc)
+    return end - window, end
 
 
 def _assign_source_group(platform: str) -> str:
@@ -23,6 +41,8 @@ def _assign_source_group(platform: str) -> str:
         return "Twitter / X"
     if platform == "news":
         return "Google News"
+    if platform == "gdelt":
+        return "GDELT Historical Archive"
     return "Social Media"
 
 
@@ -53,13 +73,22 @@ def _shape_variant(q: str, platform: str) -> str:
     return q.lstrip("#@") if platform in ("reddit", "youtube", "news", "indian_news") else q
 
 
-def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansions=None):
+def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansions=None,
+            time_range: str = "All Available Data", context_hints=None, exclude_terms=None):
     """
     `sources` maps a platform name ('bluesky'/'reddit'/...) -> callable(query, limit).
     The raw `term` is shaped per platform via build_query. If `expansions` (a list
     of extra query strings) is given, each source is also searched for those, and
     the per-query limit is split so total volume stays ~`limit` per platform.
     Each source is wrapped so one platform failing doesn't kill the whole run.
+
+    `time_range` restricts the returned rows to a window of `created_at` (rows with
+    an unparseable/missing date are dropped unless time_range is "All Available Data").
+    `context_hints` (e.g. ["Maharashtra", "BJP"]) are disambiguation answers — rows that
+    mention at least one hint get flagged via a `context_match` column so the UI can
+    rank/badge them, without hard-dropping legitimate matches that omit the hint text.
+    `exclude_terms` are hard-dropped: any row whose text contains one is removed
+    (used to rule out known namesakes / unrelated entities).
     """
     variants = expansions or []
     n_queries = 1 + len(variants)
@@ -84,36 +113,65 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
 
     df = pd.DataFrame(rows)
 
-    # ── Relevance filter (3-tier progressive fallback) ──────────────────────
-    # Tier 1: exact phrase  →  Tier 2: surname/last-word  →  Tier 3: any word
-    # We NEVER discard all results — worst case we show everything collected.
+    def _searchable(row):
+        return (str(row.get("text") or "") + " " + str(row.get("summary") or "")).lower()
+
+    # ── Strict Relevance Filter ──────────────────────────────────────────────
+    # For multi-word person names, BOTH words must appear in the article.
+    # Surname-only fallback is intentionally removed — it causes false positives
+    # (e.g. "thakare" alone matches Shiv Thakare, Ramvijay Thakare, etc.)
     term_words = [w.lower() for w in term.strip().lstrip("#@").split() if len(w) > 1]
-    errors["__raw_total__"] = str(len(rows))  # for debug transparency
+    errors["__raw_total__"] = str(len(rows))  # shown as debug info in UI
 
     if len(term_words) >= 2 and not df.empty:
         term_clean = term.strip().lower()
-        surname   = term_words[-1]
-        firstname = term_words[0]
 
-        def _searchable(row):
-            return (str(row.get("text") or "") + " " + str(row.get("summary") or "")).lower()
+        # Require exact phrase OR all words present — no surname-only shortcut
+        strict_mask = df.apply(
+            lambda r: term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words),
+            axis=1
+        )
+        strict_df = df[strict_mask].reset_index(drop=True)
 
-        # Tier 1: exact phrase or all words
-        tier1 = df[df.apply(lambda r: term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words), axis=1)]
-        if not tier1.empty:
-            df = tier1.reset_index(drop=True)
+        # Only apply if it keeps results — don't replace with empty
+        # (if truly 0 match, empty df is correct — show no results message)
+        df = strict_df
+
+    errors["__post_relevance_total__"] = str(len(df))
+
+    # ── Disambiguation: exclude terms (hard drop) ────────────────────────────
+    # Answers to "who is NOT this person" — a known namesake, movie, unrelated
+    # scandal, etc. Any row mentioning one is dropped outright.
+    exclude_terms = [t.strip().lower() for t in (exclude_terms or []) if t and t.strip()]
+    if exclude_terms and not df.empty:
+        exclude_mask = df.apply(lambda r: any(x in _searchable(r) for x in exclude_terms), axis=1)
+        df = df[~exclude_mask].reset_index(drop=True)
+
+    # ── Disambiguation: context hints (soft boost, never drops rows) ─────────
+    # Answers to "where / what org is this person tied to" — a state, city,
+    # party, company. We can't require it (most headlines omit it) so we just
+    # flag matches; the UI ranks/badges them as higher-confidence.
+    context_hints = [c.strip().lower() for c in (context_hints or []) if c and c.strip()]
+    if not df.empty:
+        if context_hints:
+            df["context_match"] = df.apply(lambda r: any(c in _searchable(r) for c in context_hints), axis=1)
         else:
-            # Tier 2: surname anywhere
-            tier2 = df[df.apply(lambda r: surname in _searchable(r), axis=1)]
-            if not tier2.empty:
-                df = tier2.reset_index(drop=True)
-            else:
-                # Tier 3: first name anywhere (only if > 3 chars to avoid noise)
-                if len(firstname) > 3:
-                    tier3 = df[df.apply(lambda r: firstname in _searchable(r), axis=1)]
-                    if not tier3.empty:
-                        df = tier3.reset_index(drop=True)
-                # If all tiers empty → keep full df (better some than nothing)
+            df["context_match"] = False
+
+    # ── Time range filter ─────────────────────────────────────────────────────
+    # Rows with no parseable date are dropped for a specific window (can't verify
+    # they belong in it) but kept for "All Available Data".
+    if not df.empty:
+        start, end = time_range_bounds(time_range)
+        parsed = pd.to_datetime(df["created_at"], errors="coerce", utc=True)
+        if start is not None:
+            in_window = parsed.notna() & (parsed >= start) & (parsed <= end)
+            df = df[in_window].reset_index(drop=True)
+
+    errors["__post_filter_total__"] = str(len(df))
+
+    if df.empty:
+        return pd.DataFrame(columns=NORMALIZED_FIELDS + ["sentiment", "score", "source_group", "age_group"]), errors
 
     # Score every post (batched — efficient for the transformer backend).
     pairs = score_many(df["text"].tolist())

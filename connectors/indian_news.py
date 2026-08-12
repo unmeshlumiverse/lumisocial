@@ -63,13 +63,10 @@ def _fetch_feed(source_name, meta, query_clean, query_words, max_per_feed=15):
             full_text = f"{title} {summary}".strip()
             text_low = full_text.lower()
 
-            # Relevance: exact phrase, all words, OR the surname alone so we
-            # catch headlines like "BJP leader Thakare speaks on Pune project"
+            # Relevance: BOTH words must be present — surname-only is too broad
+            # (e.g. "thakare" alone would match Shiv Thakare, Ramvijay Thakare, etc.)
             if len(query_words) >= 2:
-                surname = query_words[-1]
-                if not (query_clean in text_low
-                        or all(qw in text_low for qw in query_words)
-                        or surname in text_low):
+                if not (query_clean in text_low or all(qw in text_low for qw in query_words)):
                     continue
             elif query_words:
                 if not any(qw in text_low for qw in query_words):

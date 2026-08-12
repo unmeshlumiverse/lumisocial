@@ -7,6 +7,7 @@ Run with:  streamlit run app.py
 import os
 import re
 import math
+import datetime as dt
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -39,6 +40,17 @@ from connectors.indian_news import search_indian_newspapers
 from connectors.twitter import search_twitter
 from connectors.mastodon import search_mastodon
 from connectors.hackernews import search_hackernews
+from connectors.gdelt import search_gdelt
+
+# Streamlit Cloud secrets aren't always auto-copied into os.environ the way a
+# local .env is picked up by load_dotenv() — mirror them in explicitly so
+# every connector's os.environ.get(...) call keeps working when deployed.
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str) and not os.environ.get(_k):
+            os.environ[_k] = _v
+except Exception:
+    pass
 
 st.set_page_config(
     page_title="LUMISOCIAL | Command Center",
@@ -411,10 +423,14 @@ with st.sidebar:
     use_indian_news = st.checkbox("📰 Indian Newspapers (30+ RSS)", value=True)
     use_telegram = st.checkbox("💬 Telegram Public Channels", value=True)
     use_twitter = st.checkbox("🐦 Twitter / X (API v2)", value=True)
+    if use_twitter:
+        st.caption("⚠️ Twitter's free API only returns the **last ~7 days** — a platform limit, not a bug. It's excluded from deep historical totals.")
     use_news = st.checkbox("🌐 Google News (Global)", value=True)
+    use_gdelt = st.checkbox("🗄️ GDELT Historical Archive (2017→now)", value=True,
+                             help="The actual source of 'All Time' depth — full-text news search back to 2017.")
     use_bsky = st.checkbox("🦋 Bluesky", value=True)
     use_reddit = st.checkbox("🤖 Reddit", value=True)
-    use_youtube = st.checkbox("▶️ YouTube Comments", value=False)
+    use_youtube = st.checkbox("▶️ YouTube Comments", value=True)
     use_mastodon = st.checkbox("🐘 Mastodon", value=False)
     use_hackernews = st.checkbox("🟠 Hacker News", value=False)
 
@@ -428,7 +444,19 @@ with st.sidebar:
             )
 
     use_expand = st.checkbox("🔎 Expand Aliases (Wikidata)", value=False)
+
+    st.markdown("### 🎯 Narrow Down This Prospect")
+    st.caption("Optional — answer any of these to rule out namesakes and boost matches for the *right* person.")
+    d_loc = st.text_input("📍 State / City they're active in", placeholder="e.g. Nagpur, Maharashtra", key="d_loc_sidebar")
+    d_org = st.text_input("🏢 Organization / Party / Role", placeholder="e.g. BJP, CEO of Acme Ltd.", key="d_org_sidebar")
+    d_exclude = st.text_input("🚫 Exclude namesakes/unrelated (comma-separated)", placeholder="e.g. actor, cricketer", key="d_exclude_sidebar")
+
+    _active_connector_count = sum([
+        use_indian_news, use_telegram, use_twitter, use_news, use_gdelt,
+        use_bsky, use_reddit, use_youtube, use_mastodon, use_hackernews,
+    ])
     run = st.button("🚀 Run Intelligence Report", type="primary", use_container_width=True)
+    st.caption(f"Will search **{_active_connector_count}** active connector{'s' if _active_connector_count != 1 else ''} for this exact query.")
 
 _TYPE_MAP = {
     "Name or keyword": "keyword",
@@ -458,6 +486,7 @@ def get_platform_icon(platform):
         "youtube": "▶️",
         "mastodon": "🐘",
         "hackernews": "🟠",
+        "gdelt": "🗄️",
     }
     return icons.get(platform, "📡")
 
@@ -511,6 +540,8 @@ if use_hackernews:
     sources["hackernews"] = lambda q, n: search_hackernews(q, n)
 if use_news:
     sources["news"] = lambda q, n: search_news(q, n, country="IN", lang="en")
+if use_gdelt:
+    sources["gdelt"] = lambda q, n: search_gdelt(q, n, time_range=time_range)
 if use_telegram:
     issue = _credential_issue("telegram")
     tg_channels = [c.strip() for c in tg_channels_raw.replace(",", "\n").splitlines() if c.strip()]
@@ -520,14 +551,74 @@ if use_telegram:
         ch_list = tg_channels if tg_channels else DEFAULT_INDIA_CHANNELS
         sources["telegram"] = lambda q, n: search_telegram(q, n, channels=ch_list)
 
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_collect(term, search_type, source_names, limit, expansions_key, time_range,
+                     context_key, exclude_key, _sources, _expansions, _context_hints, _exclude_terms):
+    """
+    Thin cache wrapper around pipeline.collect(). Args prefixed with `_` are
+    excluded from Streamlit's cache key (they're callables/lists that can't be
+    hashed meaningfully) — the real cache key is the plain hashable args
+    (term, source names, limit, etc). A 15-minute TTL means re-running the
+    same search shortly after (e.g. after just toggling a filter) reuses the
+    already-fetched data instead of re-hitting every network source again.
+    """
+    return collect(term, search_type, _sources, limit=limit, expansions=_expansions,
+                    time_range=time_range, context_hints=_context_hints, exclude_terms=_exclude_terms)
+
+
+# ---------------- RUN GATING ----------------
+# The search only (re)fetches when the user actually clicks "Run Intelligence
+# Report" — not on every unrelated widget interaction (opening a popover,
+# toggling a checkbox), which is what Streamlit's rerun-the-whole-script model
+# would otherwise trigger. Results persist in session_state across reruns.
+if run and active_term:
+    search_type = _TYPE_MAP.get(search_type_label, "keyword")
+    expansions = expand_keywords(active_term, search_type) if use_expand else []
+    context_hints = [h for h in (d_loc, d_org) if h and h.strip()]
+    exclude_terms = [t.strip() for t in d_exclude.split(",") if t.strip()]
+
+    spinner_msg = f"Fetching intelligence report for '{active_term}' ({time_range})"
+    if use_gdelt and time_range == "All Available Data":
+        spinner_msg += " — sweeping the GDELT 2017→now archive for full historical depth, ~20-30s"
+    with st.spinner(spinner_msg + "..."):
+        fetched_df, fetched_errors = _cached_collect(
+            active_term, search_type, tuple(sorted(sources.keys())), limit,
+            tuple(expansions), time_range, tuple(context_hints), tuple(exclude_terms),
+            _sources=sources, _expansions=expansions,
+            _context_hints=context_hints, _exclude_terms=exclude_terms,
+        )
+    fetched_stats = summarize(fetched_df)
+
+    if not fetched_df.empty:
+        emotion_counts = fetched_df["emotion"].value_counts().to_dict()
+        dominant_emotion = fetched_df["emotion"].mode().iat[0] if emotion_counts else "neutral"
+        theme_words, _theme_tags = extract_hot_topics(fetched_df["text"].tolist(), extra_stop=active_term.split(), top_n=15)
+        storage.save_run(active_term, fetched_stats, list(sources.keys()), dominant_emotion, emotion_counts, theme_words)
+
+    st.session_state["last_report"] = {
+        "term": active_term,
+        "time_range": time_range,
+        "df": fetched_df,
+        "errors": fetched_errors,
+        "stats": fetched_stats,
+        "fetched_at": dt.datetime.now().strftime("%b %d, %Y · %H:%M"),
+    }
+elif run and not active_term:
+    st.warning("⚠️ Enter a name, hashtag, or handle in the sidebar before running a report.")
+
+report = st.session_state.get("last_report")
+
 # Main action sub-header
 top_c1, top_c2, top_c3 = st.columns([2, 3, 1])
 with top_c1:
-    term_display = f"({active_term})" if active_term else "(Awaiting Search Target)"
+    header_term = report["term"] if report else active_term
+    term_display = f"({header_term})" if header_term else "(Awaiting Search Target)"
     st.markdown(f"<h3 style='margin:0; font-weight:800; color:#0f172a;'>📊 Intelligence Report ▾ <span style='font-size:0.92rem; font-weight:600; color:#00875a;'>{term_display}</span></h3>", unsafe_allow_html=True)
 with top_c2:
-    range_label = time_range if 'time_range' in dir() else 'All Available Data'
-    st.caption(f"⚡ Full Coverage · {range_label} · Real-Time Polarity Stream")
+    range_label = report["time_range"] if report else time_range
+    fetched_label = f" · Last run {report['fetched_at']}" if report else ""
+    st.caption(f"⚡ Full Coverage · {range_label}{fetched_label}")
 with top_c3:
     st.markdown("<div style='text-align:right;'><span style='background:#ffffff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; font-weight:700; font-size:0.82rem; color:#1e293b; cursor:pointer;'>📥 Export Report</span></div>", unsafe_allow_html=True)
 
@@ -538,30 +629,35 @@ tab1, tab2 = st.tabs([
 ])
 
 with tab1:
-    if not active_term:
+    if not report:
         st.markdown("""<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:36px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.02); margin-top:10px;">
 <div style="font-size:2.4rem; margin-bottom:8px;">📊</div>
 <h3 style="margin:0 0 8px 0; color:#0f172a; font-weight:800;">Welcome to LUMISOCIAL Intelligence Command Center</h3>
-<p style="color:#64748b; font-size:0.95rem; max-width:620px; margin:0 auto 20px auto;">Enter any public figure, politician, or brand in the sidebar and click <b>Run Intelligence Report</b> to pull <b>all available data</b> — from Indian Newspapers, Google News, Telegram, Twitter/X, Reddit, and social channels. No date limit — full historical + present coverage.</p>
+<p style="color:#64748b; font-size:0.95rem; max-width:620px; margin:0 auto 20px auto;">Enter any public figure, politician, or brand in the sidebar — optionally narrow it down with the 3 disambiguation questions — and click <b>Run Intelligence Report</b> to pull <b>all available data</b>, including a real historical archive back to 2017 via GDELT. No date limit — full historical + present coverage.</p>
 </div>""", unsafe_allow_html=True)
     else:
-        spinner_msg = f"Fetching full intelligence report for '{active_term}' ({time_range})..."
-        with st.spinner(spinner_msg):
-            search_type = _TYPE_MAP.get(search_type_label, "keyword")
-            expansions = expand_keywords(active_term, search_type) if use_expand else []
-            df, errors = collect(active_term, search_type, sources, limit=limit, expansions=expansions)
+        df = report["df"]
+        errors = dict(report["errors"])
+        stats = report["stats"]
+        active_term = report["term"]
+        time_range = report["time_range"]
 
         raw_total = errors.pop("__raw_total__", None)
+        post_relevance_total = errors.pop("__post_relevance_total__", None)
+        post_filter_total = errors.pop("__post_filter_total__", None)
         for name, err in errors.items():
             st.warning(f"⚠️ {name}: {err}")
         if raw_total:
-            st.caption(f"🔍 Raw posts collected before relevance filter: **{raw_total}**")
+            st.caption(
+                f"🔍 Pipeline funnel: **{raw_total}** raw posts collected → "
+                f"**{post_relevance_total}** passed the name-relevance filter → "
+                f"**{post_filter_total}** passed the time-range/exclusion filters."
+            )
 
         if df.empty:
-            st.info(f"No matching posts found for '{active_term}'. Try broadening your search query or selecting additional sources in the sidebar.")
+            st.info(f"No matching posts found for '{active_term}' in this time range. Try 'All Available Data', broadening your search query, removing exclude terms, or selecting additional sources in the sidebar.")
             st.stop()
 
-        stats = summarize(df)
         pos_count = stats["positive"]
         neg_count = stats["negative"]
         neu_count = stats["neutral"]
@@ -680,7 +776,12 @@ with tab1:
             if feed_df.empty:
                 feed_df = df
 
-            top_feeds = feed_df.sort_values("engagement", ascending=False).head(15)
+            has_context = "context_match" in feed_df.columns and feed_df["context_match"].any()
+            sort_cols = ["context_match", "engagement"] if has_context else ["engagement"]
+            sort_asc = [False, False] if has_context else [False]
+            top_feeds = feed_df.sort_values(sort_cols, ascending=sort_asc).head(15)
+            if has_context:
+                st.caption("🎯 Posts matching your disambiguation hints (location/org) are ranked first and badged below.")
 
             for idx, r in top_feeds.iterrows():
                 sent = str(r.get("sentiment", "neutral")).lower()
@@ -709,6 +810,8 @@ with tab1:
                 sent_pill_cls = "feed-pill-pos" if sent == "positive" else ("feed-pill-neg" if sent == "negative" else "feed-pill-neu")
 
                 tags_html = f"<span class='feed-pill {sent_pill_cls}'>{sent.upper()}</span><span class='feed-pill'>Emotion: {emotion_str}</span>"
+                if bool(r.get("context_match")):
+                    tags_html += "<span class='feed-pill' style='background:#dcfce7;border-color:#86efac;color:#166534;'>🎯 Confirmed Match</span>"
                 if state_loc:
                     loc_txt = f"{city_loc}, {state_loc}" if city_loc else state_loc
                     tags_html += f"<span class='feed-pill feed-pill-loc'>📍 {loc_txt}</span>"
@@ -804,6 +907,29 @@ with tab1:
                 else:
                     st.caption("State mentions will appear here when location cues are detected in posts.")
 
+            # Time-Wise Trend History (across past runs for this exact term)
+            st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown("##### 📈 Sentiment Trend Over Time")
+                hist_df = storage.load_history(term=active_term)
+                if len(hist_df) >= 2:
+                    fig_hist = go.Figure()
+                    fig_hist.add_trace(go.Scatter(
+                        x=hist_df["ts"], y=hist_df["positivity_ratio"],
+                        mode="lines+markers", name="Positivity %",
+                        line=dict(color="#00875a", width=2),
+                    ))
+                    fig_hist.update_layout(
+                        height=160, margin=dict(l=0, r=0, t=10, b=0),
+                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#94a3b8")),
+                        yaxis=dict(showgrid=True, gridcolor="#f1f5f9", tickfont=dict(size=9, color="#94a3b8"), title="Positivity %"),
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
+                    st.caption(f"Across {len(hist_df)} past runs for '{active_term}' on this instance — how public sentiment has moved run over run.")
+                else:
+                    st.caption("Run a report for this same prospect again later (on this running instance) to build a sentiment-over-time trend line here.")
+
 
 # ==================== TAB 2: TARGET DISAMBIGUATION & CLIENT PITCH GUIDE ====================
 with tab2:
@@ -833,13 +959,20 @@ with tab2:
            - Are there famous namesakes (movies, actors, unrelated scandals) to exclude?
         """)
 
-        st.markdown("##### 🛠️ Disambiguation Query Helper")
-        q_name = st.text_input("Person Name", value=active_term if active_term else "", key="d_name")
-        q_loc = st.text_input("State / City (e.g., Maharashtra)", value="Maharashtra", key="d_loc")
-        q_org = st.text_input("Organization / Designation (e.g., BJP)", value="", key="d_org")
-
-        refined_query = f"{q_name} {q_loc} {q_org}".strip()
-        st.code(f"Suggested Refined Search Query: {refined_query}", language="text")
+        st.markdown("##### 🛠️ Disambiguation Filters Applied To This Report")
+        st.caption("These come from the **🎯 Narrow Down This Prospect** fields in the sidebar — fill them in and click Run again to sharpen results.")
+        applied_loc = st.session_state.get("d_loc_sidebar", "")
+        applied_org = st.session_state.get("d_org_sidebar", "")
+        applied_exclude = st.session_state.get("d_exclude_sidebar", "")
+        if applied_loc or applied_org or applied_exclude:
+            if applied_loc:
+                st.markdown(f"📍 **Location hint:** `{applied_loc}` — matching posts are ranked first and badged 🎯")
+            if applied_org:
+                st.markdown(f"🏢 **Org/role hint:** `{applied_org}` — matching posts are ranked first and badged 🎯")
+            if applied_exclude:
+                st.markdown(f"🚫 **Excluded terms:** `{applied_exclude}` — any post mentioning these was dropped entirely")
+        else:
+            st.info("No disambiguation hints set yet — add them in the sidebar for higher-precision results on common names.")
 
     with d_col2:
         st.markdown("#### 📊 2. Client Explanation Guide (Explaining Numbers & Charts)")

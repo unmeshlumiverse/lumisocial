@@ -1,10 +1,15 @@
-# Public Figure Monitor
+# LUMISOCIAL — Public Figure Monitor
 
-A free, self-hosted social-listening dashboard. Type a public figure's name (or a
-`@username` or `#hashtag`) and see what people are saying about them across
-**Bluesky, Reddit, YouTube, Telegram, and Google News** — with sentiment,
-emotions, a world map, the main narratives, hot topics, top voices, a shareable
-report, and sentiment trends over time.
+A free, cloud-hosted social-listening command center. Type a public figure's name
+(or a `@username` or `#hashtag`) and see what people are saying about them across
+**Indian Newspapers, Google News, GDELT historical archive, Telegram, Twitter/X,
+Bluesky, Reddit, and YouTube** — with sentiment, emotions, a state-wise India
+breakdown, hot topics, top voices, a shareable report, and sentiment trends over
+time.
+
+Live at: **https://lumisocial.streamlit.app/** — runs on Streamlit Community
+Cloud, so it's up 24/7 regardless of whether your own laptop is on (see
+**[Deploying for 24/7 uptime](#-deploying-for-247-uptime-streamlit-community-cloud)**).
 
 Built to run at **$0** — no paid APIs, no database server, no scraping. Optional
 AI models make it smarter (see **[AI setup](#-ai-setup-optional-but-recommended)**),
@@ -15,15 +20,27 @@ but the app runs fully without them.
 ## What it does
 
 - **Search** by name / keyword, `#hashtag`, or `@username mentions`.
-- **Seven free sources**: Bluesky (no auth), Reddit, YouTube, Telegram, Google News, Mastodon (no auth), Hacker News (no auth).
+- **9 sources**: Indian Newspaper RSS (30+ outlets), Google News (6 language editions),
+  **GDELT** (real historical news archive back to 2017 — this is what makes "All
+  Available Data" actually mean all time, not just what's currently published),
+  Telegram, Twitter/X, Bluesky, Reddit, YouTube comments, Mastodon, Hacker News.
+- **Time range that actually filters**: Past 24h / Past Week / Past Month / All
+  Available Data — results are filtered to the selected window (not cosmetic).
+- **Prospect disambiguation**: 3 optional sidebar questions (state/city, org or
+  role, exclude terms) rule out namesakes and rank/badge the posts that actually
+  match the right person — for common names where dozens of unrelated people
+  share it.
 - **Sentiment**: positive / negative / neutral, dominant mood, positivity ratio.
 - **Emotions**: love / joy / anger / hate / fear / sadness, colour-coded.
-- **World sentiment map** + **India state/city detail**: countries coloured by sentiment, plus an estimated state- and city-wise breakdown for India (all estimates - see caveats).
-- **Main narratives**: posts clustered into the storylines people are pushing, each with its own sentiment.
-- **Hot topics & hashtags**, **most-reached voices**, and the **loudest post** (with poster ID + link).
-- **Keyword expansion** (optional): hashtag/name variants + real Wikidata aliases (incl. Hindi) to catch more mentions.
+- **India state/city detail**: an estimated state- and city-wise sentiment
+  breakdown (inferred from text mentions, not real geolocation — see caveats).
+- **Hot topics & hashtags**, **most-reached voices**, and the **loudest post**
+  (with poster ID + link).
+- **Keyword expansion** (optional): hashtag/name variants + real Wikidata aliases
+  (incl. Hindi/Marathi) to catch more mentions.
 - **Shareable HTML report** you can download and send to your org.
-- **History & trends**: every run is saved locally so you can chart sentiment/volume over time; schedule headless runs with `scheduled_run.py`.
+- **History & trends**: every run is saved so you can chart sentiment over time
+  for the same prospect; schedule headless runs with `scheduled_run.py`.
 
 ---
 
@@ -36,7 +53,47 @@ streamlit run app.py
 ```
 
 Bluesky needs **no setup** - tick it in the sidebar, type a name, click **Run
-analysis**. To add the other sources or the AI models, see below.
+Intelligence Report**. To add the other sources or the AI models, see below.
+
+---
+
+## ☁️ Deploying for 24/7 uptime (Streamlit Community Cloud)
+
+The app being reachable at all times has nothing to do with your laptop being on
+— once it's deployed on Streamlit Community Cloud, it runs on Streamlit's own
+servers. The one thing that actually needs doing is giving that cloud instance
+your API keys, because **it never reads your local `.env` file** (that file only
+exists on your machine and is gitignored on purpose — it should never be
+committed).
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) → your app (or **New app**
+   pointing at `unmeshlumiverse/lumisocial`, file `app.py`, branch `main`).
+2. Open **Settings → Secrets** and paste your keys in flat TOML (no `[section]`
+   headers — Streamlit mirrors top-level string secrets into `os.environ`, which
+   is what every connector in this repo reads from):
+   ```toml
+   YOUTUBE_API_KEY = "..."
+   REDDIT_CLIENT_ID = "..."
+   REDDIT_CLIENT_SECRET = "..."
+   REDDIT_USER_AGENT = "lumisocial by u/yourusername"
+   TWITTER_BEARER_TOKEN = "..."
+   TELEGRAM_API_ID = "..."
+   TELEGRAM_API_HASH = "..."
+   ```
+   (Only add the keys for sources you actually use — every connector degrades
+   gracefully and shows a sidebar warning if its key is missing, it never crashes
+   the app.)
+3. Save. Streamlit redeploys automatically and the app is live at your
+   `*.streamlit.app` URL for anyone with the link — no laptop required, and it
+   redeploys automatically on every push to `main`.
+4. Streamlit Cloud's free tier sleeps an app after ~long inactivity; the **first**
+   visit after that wakes it up in a few seconds. That's a cold-start delay, not
+   downtime — the app and its code are always there, just spun down to save
+   resources when nobody's using it.
+5. Telegram is the one source that can't be configured through secrets alone —
+   it needs the one-time interactive login (`python telegram_login.py`) run
+   locally first, and the resulting `monitor.session` file uploaded alongside the
+   repo (or re-run whenever the cloud instance's ephemeral disk resets it).
 
 ---
 
@@ -177,9 +234,12 @@ pipeline.py          # fetch -> score -> aggregate engine
 connectors/
   bluesky.py         # free public search, no auth
   reddit.py          # PRAW read-only
-  youtube.py         # comments via YouTube Data API v3
+  youtube.py         # comments via YouTube Data API v3, relevance+date+viewCount sweep
   telegram.py        # Telethon, searches public channels
-  news.py            # Google News RSS (no key)
+  twitter.py         # official API v2 (last ~7 days only - platform limit)
+  news.py            # Google News RSS, multi-window + multi-language (no key)
+  indian_news.py      # 30+ Indian newspaper RSS feeds, national + regional (no key)
+  gdelt.py            # GDELT DOC 2.0 API - real historical archive back to 2017 (no key)
   mastodon.py        # public hashtag timeline (no auth)
   hackernews.py      # HN via Algolia API (no key)
 sentiment.py         # VADER + optional multilingual AI (auto-fallback)
