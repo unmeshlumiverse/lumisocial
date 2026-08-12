@@ -84,30 +84,36 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
 
     df = pd.DataFrame(rows)
 
-    # Relevance filter for multi-word queries:
-    # Require the exact phrase OR all words to appear in text+summary combined.
-    # Falls back to surname-only match to ensure real mentions are never dropped.
+    # ── Relevance filter (3-tier progressive fallback) ──────────────────────
+    # Tier 1: exact phrase  →  Tier 2: surname/last-word  →  Tier 3: any word
+    # We NEVER discard all results — worst case we show everything collected.
     term_words = [w.lower() for w in term.strip().lstrip("#@").split() if len(w) > 1]
+    errors["__raw_total__"] = str(len(rows))  # for debug transparency
+
     if len(term_words) >= 2 and not df.empty:
         term_clean = term.strip().lower()
-        surname = term_words[-1]  # most specific identifier (last name)
+        surname   = term_words[-1]
+        firstname = term_words[0]
 
-        # Combine text + summary for matching so short headlines don't get dropped
-        def _combined(row):
+        def _searchable(row):
             return (str(row.get("text") or "") + " " + str(row.get("summary") or "")).lower()
 
-        def _is_relevant(row):
-            combined = _combined(row)
-            # Match if: exact phrase found, ALL words found, or surname is present
-            return (term_clean in combined
-                    or all(w in combined for w in term_words)
-                    or surname in combined)
-
-        mask = df.apply(_is_relevant, axis=1)
-        filtered = df[mask].reset_index(drop=True)
-        # Only apply the filter if it keeps some results; otherwise show all (better than nothing)
-        if not filtered.empty:
-            df = filtered
+        # Tier 1: exact phrase or all words
+        tier1 = df[df.apply(lambda r: term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words), axis=1)]
+        if not tier1.empty:
+            df = tier1.reset_index(drop=True)
+        else:
+            # Tier 2: surname anywhere
+            tier2 = df[df.apply(lambda r: surname in _searchable(r), axis=1)]
+            if not tier2.empty:
+                df = tier2.reset_index(drop=True)
+            else:
+                # Tier 3: first name anywhere (only if > 3 chars to avoid noise)
+                if len(firstname) > 3:
+                    tier3 = df[df.apply(lambda r: firstname in _searchable(r), axis=1)]
+                    if not tier3.empty:
+                        df = tier3.reset_index(drop=True)
+                # If all tiers empty → keep full df (better some than nothing)
 
     # Score every post (batched — efficient for the transformer backend).
     pairs = score_many(df["text"].tolist())

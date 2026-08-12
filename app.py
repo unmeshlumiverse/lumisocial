@@ -551,8 +551,11 @@ with tab1:
             expansions = expand_keywords(active_term, search_type) if use_expand else []
             df, errors = collect(active_term, search_type, sources, limit=limit, expansions=expansions)
 
+        raw_total = errors.pop("__raw_total__", None)
         for name, err in errors.items():
             st.warning(f"⚠️ {name}: {err}")
+        if raw_total:
+            st.caption(f"🔍 Raw posts collected before relevance filter: **{raw_total}**")
 
         if df.empty:
             st.info(f"No matching posts found for '{active_term}'. Try broadening your search query or selecting additional sources in the sidebar.")

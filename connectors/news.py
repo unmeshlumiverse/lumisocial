@@ -1,9 +1,9 @@
 """
-Google News connector (RSS) — Multi-window intelligence sweep.
+Google News connector (RSS) — Multi-window, multi-language intelligence sweep.
 
 Completely free — no API key, no signup, no rate limit worth worrying about.
-Fetches Google News across multiple time windows (past day, week, month, all-time)
-to give a FULL intelligence picture of the prospect, not just today's news.
+Fetches Google News across multiple time windows AND multiple language/region editions
+to give a FULL intelligence picture of any prospect — national or regional politician.
 """
 
 from urllib.parse import quote_plus
@@ -13,12 +13,21 @@ import requests
 BASE = "https://news.google.com/rss/search"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PublicFigureMonitor/1.0"
 
-# Time window suffixes for Google News RSS (when: filters)
+# Time window suffixes for Google News RSS
 TIME_WINDOWS = [
-    "",          # all-time / no filter → most results
+    "",          # all-time / no filter
     " when:1m",  # past month
     " when:7d",  # past week
-    " when:1d",  # past day (fresh)
+]
+
+# Language+Country combos to cover national + regional Indian media
+EDITIONS = [
+    ("IN", "en"),   # English India — national press
+    ("IN", "hi"),   # Hindi India — Dainik Jagran, Amar Ujala etc.
+    ("IN", "mr"),   # Marathi India — Lokmat, Sakal, Maharashtra Times
+    ("IN", "te"),   # Telugu — Eenadu, Sakshi
+    ("IN", "ta"),   # Tamil — Dinamalar, Daily Thanthi
+    ("IN", "bn"),   # Bengali — Anandabazar
 ]
 
 
@@ -31,48 +40,55 @@ def _clean_title(title):
     return title.rsplit(" - ", 1)[0] if " - " in title else title
 
 
-def search_news(query, limit=80, country="IN", lang="en"):
+def search_news(query, limit=100, country="IN", lang="en"):
     """
-    Search Google News across multiple time windows for a comprehensive
-    intelligence picture — not just today's news.
-    Returns deduplicated posts sorted by freshness.
+    Search Google News across multiple time windows AND multiple language editions
+    for comprehensive regional + national coverage of any prospect.
+    Returns deduplicated posts.
     """
     q_clean = query.strip()
     words = [w.lower() for w in q_clean.lstrip("#@").split() if len(w) > 1]
     surname = words[-1] if words else ""
+    firstname = words[0] if words else ""
 
     # Build both exact-phrase and unquoted variants
     exact_q = f'"{q_clean}"' if len(words) >= 2 and not q_clean.startswith('"') else q_clean
 
     all_entries = {}  # dedup by link/id
 
-    for window in TIME_WINDOWS:
-        for base_query in ([exact_q, q_clean] if exact_q != q_clean else [q_clean]):
-            timed_q = f"{base_query}{window}"
-            url = _feed_url(timed_q, country, lang)
-            try:
-                resp = requests.get(url, timeout=12, headers={"User-Agent": USER_AGENT})
-                if resp.status_code != 200:
+    for (ed_country, ed_lang) in EDITIONS:
+        for window in TIME_WINDOWS:
+            queries_to_try = [exact_q + window]
+            if exact_q != q_clean:
+                queries_to_try.append(q_clean + window)  # also try unquoted
+
+            for q_variant in queries_to_try:
+                url = _feed_url(q_variant, ed_country, ed_lang)
+                try:
+                    resp = requests.get(url, timeout=10, headers={"User-Agent": USER_AGENT})
+                    if resp.status_code != 200:
+                        continue
+                    feed = feedparser.parse(resp.content)
+                    for e in feed.entries:
+                        key = e.get("id") or e.get("link") or ""
+                        if key and key not in all_entries:
+                            all_entries[key] = e
+                except Exception:
                     continue
-                feed = feedparser.parse(resp.content)
-                for e in feed.entries:
-                    key = e.get("id") or e.get("link") or ""
-                    if key and key not in all_entries:
-                        all_entries[key] = e
-            except Exception:
-                continue
 
     posts = []
-    for e in list(all_entries.values())[:limit * 2]:  # over-fetch, then filter
+    for e in list(all_entries.values()):
         title = _clean_title(e.get("title", ""))
         summary = e.get("summary") or ""
         searchable = f"{title} {summary}".lower()
 
         # Relevance: exact phrase, all words, OR surname present
+        # For regional politicians the headline might only use the surname
         if len(words) >= 2:
             if not (q_clean.lower() in searchable
                     or all(w in searchable for w in words)
-                    or (surname and surname in searchable)):
+                    or (surname and surname in searchable)
+                    or (firstname and firstname in searchable and len(firstname) > 3)):
                 continue
 
         source = ""

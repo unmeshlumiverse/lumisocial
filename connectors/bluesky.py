@@ -1,14 +1,15 @@
 """
 Bluesky connector.
 
-Uses Bluesky's PUBLIC search endpoint, which needs NO authentication and NO
-API key.
+Uses Bluesky's PUBLIC search endpoint.
+Handles 403/auth errors gracefully and returns empty list.
 Docs: https://docs.bsky.app/docs/api/app-bsky-feed-search-posts
 """
 
 import requests
 
 SEARCH_URL = "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts"
+FALLBACK_URL = "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PublicFigureMonitor/1.0"
 
 
@@ -25,6 +26,7 @@ def search_bluesky(query: str, limit: int = 50):
     """
     Search recent Bluesky posts mentioning `query`.
     Returns a list of normalized post dicts.
+    Handles 403 Forbidden (API now requires auth) gracefully → returns [].
     """
     q_str = query.strip()
     words = [w for w in q_str.lstrip("#@").split() if len(w) > 1]
@@ -33,9 +35,24 @@ def search_bluesky(query: str, limit: int = 50):
 
     params = {"q": q_str, "limit": min(max(limit, 1), 100), "sort": "latest"}
     headers = {"User-Agent": USER_AGENT}
-    resp = requests.get(SEARCH_URL, params=params, headers=headers, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
+
+    data = None
+    for url in [SEARCH_URL, FALLBACK_URL]:
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            if resp.status_code == 403:
+                # Bluesky now requires auth for search — skip gracefully
+                raise PermissionError("Bluesky search requires authentication. Enable Bluesky credentials or uncheck Bluesky in connectors.")
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except PermissionError:
+            raise   # re-raise so pipeline shows it as a friendly warning
+        except Exception:
+            continue  # try fallback URL
+
+    if not data:
+        return []
 
     posts = []
     for item in data.get("posts", []):
