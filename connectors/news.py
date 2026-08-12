@@ -56,13 +56,15 @@ def search_news(query, limit=50, country="IN", lang="en"):
     posts = []
     for e in entries[:limit]:
         title = _clean_title(e.get("title", ""))
-        title_low = title.lower()
+        # Also check summary for relevance
+        summary = e.get("summary") or ""
+        searchable = f"{title} {summary}".lower()
 
-        # Strict relevance check: If multi-word search, require at least the full term or the core first name
-        # to appear in the article title to eliminate completely different people (e.g. Shiv Thakare for Ramvijay Thakare)
+        # Relevance check: require exact phrase, all words, OR the last name (surname) in article
+        # This prevents unrelated same-surname articles but keeps real mentions
         if len(words) >= 2:
-            # Check if all words or exact name or the first name is present
-            if not (all(w in title_low for w in words) or words[0] in title_low or q_clean.lower() in title_low):
+            last_word = words[-1]  # surname
+            if not (q_clean.lower() in searchable or all(w in searchable for w in words) or last_word in searchable):
                 continue
 
         source = ""

@@ -84,16 +84,30 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
 
     df = pd.DataFrame(rows)
 
-    # Filter out false-positive posts for multi-word queries (e.g., "Amar Thakare" must match both tokens, not "amar rahe")
+    # Relevance filter for multi-word queries:
+    # Require the exact phrase OR all words to appear in text+summary combined.
+    # Falls back to surname-only match to ensure real mentions are never dropped.
     term_words = [w.lower() for w in term.strip().lstrip("#@").split() if len(w) > 1]
     if len(term_words) >= 2 and not df.empty:
         term_clean = term.strip().lower()
-        def _is_relevant(text):
-            t_low = str(text or "").lower()
-            # Post must contain the exact full phrase or ALL words of the query
-            return term_clean in t_low or all(w in t_low for w in term_words)
+        surname = term_words[-1]  # most specific identifier (last name)
 
-        df = df[df["text"].apply(_is_relevant)].reset_index(drop=True)
+        # Combine text + summary for matching so short headlines don't get dropped
+        def _combined(row):
+            return (str(row.get("text") or "") + " " + str(row.get("summary") or "")).lower()
+
+        def _is_relevant(row):
+            combined = _combined(row)
+            # Match if: exact phrase found, ALL words found, or surname is present
+            return (term_clean in combined
+                    or all(w in combined for w in term_words)
+                    or surname in combined)
+
+        mask = df.apply(_is_relevant, axis=1)
+        filtered = df[mask].reset_index(drop=True)
+        # Only apply the filter if it keeps some results; otherwise show all (better than nothing)
+        if not filtered.empty:
+            df = filtered
 
     # Score every post (batched — efficient for the transformer backend).
     pairs = score_many(df["text"].tolist())
