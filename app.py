@@ -399,7 +399,13 @@ with st.sidebar:
         ["Name or keyword", "#hashtag", "@username mentions"],
         index=0,
     )
-    limit = st.slider("Limit per Platform", 10, 150, 50, step=10)
+    time_range = st.selectbox(
+        "📅 Time Range",
+        ["All Available Data", "Past 1 Month", "Past 1 Week", "Past 24 Hours"],
+        index=0,
+        help="How far back to pull data. 'All Available' fetches maximum historical coverage."
+    )
+    limit = st.slider("Limit per Platform", 10, 200, 100, step=10)
 
     st.markdown("### 📡 Active Connectors")
     use_indian_news = st.checkbox("📰 Indian Newspapers (30+ RSS)", value=True)
@@ -422,7 +428,7 @@ with st.sidebar:
             )
 
     use_expand = st.checkbox("🔎 Expand Aliases (Wikidata)", value=False)
-    run = st.button("🚀 Fetch Today's Feeds", type="primary", use_container_width=True)
+    run = st.button("🚀 Run Intelligence Report", type="primary", use_container_width=True)
 
 _TYPE_MAP = {
     "Name or keyword": "keyword",
@@ -518,11 +524,12 @@ if use_telegram:
 top_c1, top_c2, top_c3 = st.columns([2, 3, 1])
 with top_c1:
     term_display = f"({active_term})" if active_term else "(Awaiting Search Target)"
-    st.markdown(f"<h3 style='margin:0; font-weight:800; color:#0f172a;'>Today's Feeds ▾ <span style='font-size:0.92rem; font-weight:600; color:#00875a;'>{term_display}</span></h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='margin:0; font-weight:800; color:#0f172a;'>📊 Intelligence Report ▾ <span style='font-size:0.92rem; font-weight:600; color:#00875a;'>{term_display}</span></h3>", unsafe_allow_html=True)
 with top_c2:
-    st.caption("⚡ Live Ingestion & Real-Time Polarity Stream")
+    range_label = time_range if 'time_range' in dir() else 'All Available Data'
+    st.caption(f"⚡ Full Coverage · {range_label} · Real-Time Polarity Stream")
 with top_c3:
-    st.markdown("<div style='text-align:right;'><span style='background:#ffffff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; font-weight:700; font-size:0.82rem; color:#1e293b; cursor:pointer;'>📥 Export Feeds</span></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:right;'><span style='background:#ffffff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; font-weight:700; font-size:0.82rem; color:#1e293b; cursor:pointer;'>📥 Export Report</span></div>", unsafe_allow_html=True)
 
 # ---------------- EXACTLY 2 TABS INTERFACE ----------------
 tab1, tab2 = st.tabs([
@@ -533,12 +540,13 @@ tab1, tab2 = st.tabs([
 with tab1:
     if not active_term:
         st.markdown("""<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:36px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.02); margin-top:10px;">
-<div style="font-size:2.4rem; margin-bottom:8px;">⚡</div>
-<h3 style="margin:0 0 8px 0; color:#0f172a; font-weight:800;">Welcome to LUMISOCIAL Command Center</h3>
-<p style="color:#64748b; font-size:0.95rem; max-width:560px; margin:0 auto 20px auto;">Enter any public figure, person's name, or hashtag in the sidebar and click <b>Fetch Today's Feeds</b> to stream live intelligence across Indian Newspapers, Telegram, Twitter/X, and social channels.</p>
+<div style="font-size:2.4rem; margin-bottom:8px;">📊</div>
+<h3 style="margin:0 0 8px 0; color:#0f172a; font-weight:800;">Welcome to LUMISOCIAL Intelligence Command Center</h3>
+<p style="color:#64748b; font-size:0.95rem; max-width:620px; margin:0 auto 20px auto;">Enter any public figure, politician, or brand in the sidebar and click <b>Run Intelligence Report</b> to pull <b>all available data</b> — from Indian Newspapers, Google News, Telegram, Twitter/X, Reddit, and social channels. No date limit — full historical + present coverage.</p>
 </div>""", unsafe_allow_html=True)
     else:
-        with st.spinner(f"Ingesting real-time feeds for '{active_term}'..."):
+        spinner_msg = f"Fetching full intelligence report for '{active_term}' ({time_range})..."
+        with st.spinner(spinner_msg):
             search_type = _TYPE_MAP.get(search_type_label, "keyword")
             expansions = expand_keywords(active_term, search_type) if use_expand else []
             df, errors = collect(active_term, search_type, sources, limit=limit, expansions=expansions)
