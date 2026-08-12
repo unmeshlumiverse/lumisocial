@@ -1,0 +1,6 @@
+# Optional AI intelligence add-ons (free, but heavy: ~1GB+ downloads, needs more RAM/CPU).
+# Install these to enable the "AI multilingual" sentiment engine and later AI phases.
+#   pip install -r requirements-ai.txt
+transformers>=4.40.0
+torch>=2.0.0
+sentence-transformers>=2.2.2

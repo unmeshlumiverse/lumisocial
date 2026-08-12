@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+monitor_history.db
+*.session
+*.session-journal
+.env

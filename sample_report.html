@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Sentiment Report — Leader</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+         color:#1a1a1a; max-width:860px; margin:0 auto; padding:40px 24px; line-height:1.55; }
+  h1 { font-size:26px; margin-bottom:4px; }
+  .sub { color:#666; font-size:13px; margin-bottom:28px; }
+  h2 { font-size:18px; margin-top:34px; border-bottom:2px solid #eee; padding-bottom:6px; }
+  .exec { background:#f7f9fc; border-left:4px solid #3498db; padding:14px 18px; border-radius:6px; }
+  .kpis { display:flex; gap:14px; flex-wrap:wrap; margin:18px 0; }
+  .kpi { flex:1; min-width:120px; background:#fff; border:1px solid #eee; border-radius:8px;
+          padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .kpi .n { font-size:22px; font-weight:700; }
+  .kpi .l { font-size:12px; color:#777; }
+  .bar-row { display:flex; align-items:center; gap:10px; margin:5px 0; font-size:13px; }
+  .bar-label { width:110px; }
+  .bar-track { flex:1; background:#f0f0f0; border-radius:6px; height:14px; overflow:hidden; }
+  .bar-fill { display:block; height:100%; }
+  .bar-val { width:90px; text-align:right; color:#555; }
+  .chip { display:inline-block; background:#eef2f7; border-radius:14px; padding:3px 10px;
+           margin:3px; font-size:13px; }
+  .chip.tag { background:#eafaf1; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid #eee; }
+  th { color:#666; font-weight:600; }
+  .post { border:1px solid #eee; border-radius:8px; padding:10px 12px; margin:8px 0; }
+  .post-meta { font-size:12px; color:#666; margin-bottom:4px; }
+  .post-text { font-size:14px; }
+  .loudest { background:#fff8f0; border:1px solid #ffe0c0; border-radius:8px; padding:14px 16px; }
+  .theme { background:#fafbfc; border:1px solid #eee; border-radius:6px; padding:10px 14px; margin:8px 0; }
+  .theme-head { font-size:14px; }
+  .theme-ex { font-size:13px; color:#555; margin-top:4px; }
+  .warn { font-size:12px; color:#a94442; background:#fdf3f3; padding:8px 12px; border-radius:6px; }
+  footer { margin-top:40px; color:#999; font-size:12px; border-top:1px solid #eee; padding-top:12px; }
+</style></head><body>
+
+<h1>Sentiment &amp; Public-Opinion Report</h1>
+<div class="sub">Subject: <b>Leader</b> · Generated 2026-07-26 06:36 · Sources: bluesky, reddit, telegram, youtube</div>
+
+<h2>Executive summary</h2>
+<div class="exec">Across 9 recent posts mentioning “Leader”, the overall mood was <strong>positive</strong> and the most common emotion was <strong>anger</strong>. 62% of opinionated posts were positive, with 3 clearly negative and 5 clearly positive posts.</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">9</div><div class="l">Total mentions</div></div>
+  <div class="kpi"><div class="n">Positive</div><div class="l">Dominant mood</div></div>
+  <div class="kpi"><div class="n">Anger</div><div class="l">Top emotion</div></div>
+  <div class="kpi"><div class="n">62.5%</div><div class="l">Positivity ratio</div></div>
+</div>
+
+<h2>Sentiment breakdown</h2><div class="bar-row"><span class="bar-label">Positive</span><span class="bar-track"><span class="bar-fill" style="width:55.6%;background:#2ecc71"></span></span><span class="bar-val">5 (56%)</span></div><div class="bar-row"><span class="bar-label">Neutral</span><span class="bar-track"><span class="bar-fill" style="width:11.1%;background:#bdc3c7"></span></span><span class="bar-val">1 (11%)</span></div><div class="bar-row"><span class="bar-label">Negative</span><span class="bar-track"><span class="bar-fill" style="width:33.3%;background:#e74c3c"></span></span><span class="bar-val">3 (33%)</span></div>
+<h2>Emotion breakdown</h2><div class="bar-row"><span class="bar-label">anger</span><span class="bar-track"><span class="bar-fill" style="width:33.3%;background:#e67e22"></span></span><span class="bar-val">3 (33%)</span></div><div class="bar-row"><span class="bar-label">joy</span><span class="bar-track"><span class="bar-fill" style="width:22.2%;background:#82e0aa"></span></span><span class="bar-val">2 (22%)</span></div><div class="bar-row"><span class="bar-label">neutral</span><span class="bar-track"><span class="bar-fill" style="width:22.2%;background:#bdc3c7"></span></span><span class="bar-val">2 (22%)</span></div><div class="bar-row"><span class="bar-label">love</span><span class="bar-track"><span class="bar-fill" style="width:22.2%;background:#2ecc71"></span></span><span class="bar-val">2 (22%)</span></div>
+<h2>Mentions by platform</h2><div class="bar-row"><span class="bar-label">bluesky</span><span class="bar-track"><span class="bar-fill" style="width:33.3%;background:#3498db"></span></span><span class="bar-val">3 (33%)</span></div><div class="bar-row"><span class="bar-label">reddit</span><span class="bar-track"><span class="bar-fill" style="width:33.3%;background:#3498db"></span></span><span class="bar-val">3 (33%)</span></div><div class="bar-row"><span class="bar-label">youtube</span><span class="bar-track"><span class="bar-fill" style="width:22.2%;background:#3498db"></span></span><span class="bar-val">2 (22%)</span></div><div class="bar-row"><span class="bar-label">telegram</span><span class="bar-track"><span class="bar-fill" style="width:11.1%;background:#3498db"></span></span><span class="bar-val">1 (11%)</span></div>
+
+<h2>Hot topics</h2><div><span class="chip">jobs <b>3</b></span><span class="chip">scandal <b>3</b></span><span class="chip">rally <b>3</b></span><span class="chip">crowd <b>3</b></span><span class="chip">speech <b>3</b></span><span class="chip">economy <b>2</b></span><span class="chip">reforms <b>2</b></span><span class="chip">growth <b>2</b></span><span class="chip">shameful <b>2</b></span><span class="chip">corruption <b>2</b></span><span class="chip">boosted <b>1</b></span><span class="chip">great <b>1</b></span><span class="chip">economic <b>1</b></span><span class="chip">policy <b>1</b></span><span class="chip">created <b>1</b></span></div>
+<h2>Top hashtags</h2><div><em>No hashtags found.</em></div>
+
+<h2>Main narratives</h2><div class="theme" style="border-left:5px solid #2ecc71"><div class="theme-head"><b>jobs, rally, crowd</b> · 6 posts · joy · sentiment +0.55 · <i>bluesky, reddit, telegram, youtube</i></div><div class="theme-ex">“amazing rally, huge crowd cheering speech” — <b>@u6</b> — <a href="http://x/6" target="_blank">source</a></div></div><div class="theme" style="border-left:5px solid #e74c3c"><div class="theme-head"><b>scandal, shameful, corruption</b> · 3 posts · anger · sentiment -0.83 · <i>bluesky, reddit, youtube</i></div><div class="theme-ex">“so corrupt, disgusting scandal shameful” — <b>@u3</b> — <a href="http://x/3" target="_blank">source</a></div></div>
+
+<h2>Loudest post</h2><div class="loudest"><div class="post-meta"><b>@u6</b> · telegram · 👍 80 engagement · positive / joy</div><div class="post-text">amazing rally, huge crowd cheering speech</div><a href="http://x/6" target="_blank">View original →</a></div>
+
+<h2>Most-reached voices</h2>
+<table><tr><th>User</th><th>Platform</th><th>Posts</th><th>Engagement</th><th>Avg sentiment</th></tr>
+<tr><td>u6</td><td>telegram</td><td>1</td><td>80</td><td>+0.86</td></tr><tr><td>u0</td><td>bluesky</td><td>1</td><td>60</td><td>+0.85</td></tr><tr><td>u3</td><td>reddit</td><td>1</td><td>55</td><td>-0.88</td></tr><tr><td>u7</td><td>bluesky</td><td>1</td><td>50</td><td>+0.42</td></tr><tr><td>u4</td><td>bluesky</td><td>1</td><td>45</td><td>-0.77</td></tr><tr><td>u1</td><td>reddit</td><td>1</td><td>40</td><td>+0.56</td></tr><tr><td>u5</td><td>youtube</td><td>1</td><td>35</td><td>-0.84</td></tr><tr><td>u2</td><td>youtube</td><td>1</td><td>30</td><td>+0.00</td></tr></table>
+
+<h2>Top posts</h2><div class="post"><div class="post-meta"><b>@u6</b> · telegram · positive / joy · 👍 80 <a href="http://x/6" target="_blank">source</a></div><div class="post-text">amazing rally, huge crowd cheering speech</div></div><div class="post"><div class="post-meta"><b>@u0</b> · bluesky · positive / joy · 👍 60 <a href="http://x/0" target="_blank">source</a></div><div class="post-text">economy reforms boosted jobs, great growth</div></div><div class="post"><div class="post-meta"><b>@u3</b> · reddit · negative / anger · 👍 55 <a href="http://x/3" target="_blank">source</a></div><div class="post-text">so corrupt, disgusting scandal shameful</div></div><div class="post"><div class="post-meta"><b>@u7</b> · bluesky · positive / love · 👍 50 <a href="http://x/7" target="_blank">source</a></div><div class="post-text">inspiring speech at rally, massive crowd</div></div><div class="post"><div class="post-meta"><b>@u4</b> · bluesky · negative / anger · 👍 45 <a href="http://x/4" target="_blank">source</a></div><div class="post-text">corruption everywhere, scandal fraud</div></div><div class="post"><div class="post-meta"><b>@u1</b> · reddit · positive / neutral · 👍 40 <a href="http://x/1" target="_blank">source</a></div><div class="post-text">new economic policy created jobs, growth</div></div><div class="post"><div class="post-meta"><b>@u5</b> · youtube · negative / anger · 👍 35 <a href="http://x/5" target="_blank">source</a></div><div class="post-text">shameful corruption scandal unacceptable</div></div><div class="post"><div class="post-meta"><b>@u2</b> · youtube · neutral / neutral · 👍 30 <a href="http://x/2" target="_blank">source</a></div><div class="post-text">jobs and economy booming from reforms</div></div>
+
+<h2>Estimated region</h2>
+<div class="warn">⚠️ Estimate only — based on language/keywords in text, not real geolocation.</div>
+<div class="bar-row"><span class="bar-label">Unknown</span><span class="bar-track"><span class="bar-fill" style="width:100.0%;background:#9b59b6"></span></span><span class="bar-val">9 (100%)</span></div>
+
+<footer>Generated by Public Figure Monitor. Sentiment via VADER; emotion &amp; region are
+heuristic estimates. Figures reflect a sample of recent public posts, not the full platform.</footer>
+</body></html>

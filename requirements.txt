@@ -1,0 +1,10 @@
+streamlit
+praw
+vaderSentiment
+requests
+pandas
+telethon
+feedparser
+plotly
+scikit-learn
+python-dotenv
