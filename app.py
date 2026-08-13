@@ -519,19 +519,19 @@ if use_bsky:
 if use_reddit:
     issue = _credential_issue("reddit")
     if issue:
-        cred_notes.append(issue)
+        cred_notes.append(("reddit", issue))
     else:
         sources["reddit"] = lambda q, n: search_reddit(q, n)
 if use_youtube:
     issue = _credential_issue("youtube")
     if issue:
-        cred_notes.append(issue)
+        cred_notes.append(("youtube", issue))
     else:
         sources["youtube"] = lambda q, n: search_youtube(q, n)
 if use_twitter:
     issue = _credential_issue("twitter")
     if issue:
-        cred_notes.append(issue)
+        cred_notes.append(("twitter", issue))
     else:
         sources["twitter"] = lambda q, n: search_twitter(q, n)
 if use_mastodon:
@@ -546,10 +546,17 @@ if use_telegram:
     issue = _credential_issue("telegram")
     tg_channels = [c.strip() for c in tg_channels_raw.replace(",", "\n").splitlines() if c.strip()]
     if issue:
-        cred_notes.append(issue)
+        cred_notes.append(("telegram", issue))
     else:
         ch_list = tg_channels if tg_channels else DEFAULT_INDIA_CHANNELS
         sources["telegram"] = lambda q, n: search_telegram(q, n, channels=ch_list)
+
+if cred_notes:
+    with st.container(border=True):
+        st.markdown(f"##### ⚠️ {len(cred_notes)} connector{'s' if len(cred_notes) != 1 else ''} inactive — missing/invalid credentials")
+        st.caption("These sources are silently skipped on every run until fixed. Add the keys in your **Streamlit Cloud → Settings → Secrets** (or local `.env`), then rerun.")
+        for _name, _issue in cred_notes:
+            st.markdown(f"- {_issue}")
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -653,6 +660,7 @@ with tab1:
         raw_total = errors.pop("__raw_total__", None)
         post_relevance_total = errors.pop("__post_relevance_total__", None)
         post_filter_total = errors.pop("__post_filter_total__", None)
+        source_counts = errors.pop("__source_counts__", {}) or {}
         for name, err in errors.items():
             st.warning(f"⚠️ {name}: {err}")
         if raw_total:
@@ -661,6 +669,15 @@ with tab1:
                 f"**{post_relevance_total}** passed the name-relevance filter → "
                 f"**{post_filter_total}** passed the time-range/exclusion filters."
             )
+        if source_counts:
+            with st.expander("📡 Per-connector raw results (diagnostics)"):
+                diag_rows = []
+                for name, cnt in sorted(source_counts.items(), key=lambda kv: -kv[1]):
+                    diag_rows.append({"Connector": get_platform_icon(name) + " " + name, "Raw posts found": cnt})
+                st.dataframe(pd.DataFrame(diag_rows), use_container_width=True, hide_index=True)
+                zero_sources = [n for n, c in source_counts.items() if c == 0]
+                if zero_sources:
+                    st.caption(f"'{active_term}' returned 0 raw results from: {', '.join(zero_sources)}. That can be a real absence of coverage (a niche/regional figure) or a search-term mismatch — try Wikidata alias expansion, or check the connector's credentials above if you expected data.")
 
         if df.empty:
             st.info(f"No matching posts found for '{active_term}' in this time range. Try 'All Available Data', broadening your search query, removing exclude terms, or selecting additional sources in the sidebar.")

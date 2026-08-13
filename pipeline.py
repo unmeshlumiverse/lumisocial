@@ -7,6 +7,7 @@ dict shape and appending it in `collect`.
 """
 
 import datetime as dt
+import re
 
 import pandas as pd
 
@@ -96,6 +97,7 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
 
     rows = []
     errors = {}
+    source_counts = {}
     for name, fetch in sources.items():
         try:
             queries = [build_query(term, search_type, name)]
@@ -103,10 +105,15 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
             # Dedupe queries (case-insensitive) while preserving order.
             seen = set()
             deduped = [q for q in queries if q and not (q.lower() in seen or seen.add(q.lower()))]
+            source_rows = []
             for q in deduped:
-                rows.extend(fetch(q, per))
+                source_rows.extend(fetch(q, per))
+            rows.extend(source_rows)
+            source_counts[name] = len(source_rows)
         except Exception as e:  # noqa: BLE001 - surface, don't crash
             errors[name] = str(e)
+            source_counts[name] = 0
+    errors["__source_counts__"] = source_counts  # per-connector raw counts, for UI diagnostics
 
     if not rows:
         return pd.DataFrame(columns=NORMALIZED_FIELDS + ["sentiment", "score", "source_group", "age_group"]), errors
@@ -114,23 +121,44 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
     df = pd.DataFrame(rows)
 
     def _searchable(row):
-        return (str(row.get("text") or "") + " " + str(row.get("summary") or "")).lower()
+        """
+        Text used for relevance matching. Deliberately strips the post's own
+        publisher/author name first — Google News RSS descriptions embed the
+        outlet's own name as boilerplate (e.g. every Amar Ujala article's
+        summary contains the literal text "Amar Ujala"), which was causing
+        false-positive matches: searching "Amar Thakare" matched unrelated
+        "Shiv Thakare" articles purely because they were published BY Amar
+        Ujala, not because they were ABOUT the right person.
+        """
+        txt = f"{row.get('text') or ''} {row.get('summary') or ''}"
+        outlet = str(row.get("author_name") or "").strip()
+        if outlet and len(outlet) > 2:
+            txt = re.sub(re.escape(outlet), " ", txt, flags=re.IGNORECASE)
+        return txt.lower()
 
     # ── Strict Relevance Filter ──────────────────────────────────────────────
     # For multi-word person names, BOTH words must appear in the article.
     # Surname-only fallback is intentionally removed — it causes false positives
     # (e.g. "thakare" alone matches Shiv Thakare, Ramvijay Thakare, etc.)
+    #
+    # YouTube comments are exempt: they're already scoped to videos that
+    # YouTube's own search matched to the query (by relevance/date/view-count),
+    # so requiring a random comment to also literally repeat the person's full
+    # name discards most genuine, relevant comments ("such an inspiring
+    # story!" doesn't say "Amar Thakare" — it doesn't need to).
     term_words = [w.lower() for w in term.strip().lstrip("#@").split() if len(w) > 1]
     errors["__raw_total__"] = str(len(rows))  # shown as debug info in UI
 
     if len(term_words) >= 2 and not df.empty:
         term_clean = term.strip().lower()
 
+        def _is_relevant(r):
+            if r.get("platform") == "youtube":
+                return True
+            return term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words)
+
         # Require exact phrase OR all words present — no surname-only shortcut
-        strict_mask = df.apply(
-            lambda r: term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words),
-            axis=1
-        )
+        strict_mask = df.apply(_is_relevant, axis=1)
         strict_df = df[strict_mask].reset_index(drop=True)
 
         # Only apply if it keeps results — don't replace with empty
