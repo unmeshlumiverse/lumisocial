@@ -1,0 +1,38 @@
+i'm planning to develop the social monitoring application for prospects like whatever news are present in the all news social media that are positive negative or neutral in according to the timeline range 
+like last 24 hrs or they can select the timeline range or they can select the date range 
+📡 Active Connectors
+
+📰 Indian Newspapers (30+ RSS)
+
+
+💬 Telegram Public Channels
+
+🐦 Twitter / X (API v2)
+
+⚠️ Twitter's free API only returns the last ~7 days — a platform limit, not a bug. It's excluded from deep historical totals.
+
+🌐 Google News (Global)
+
+🗄️ GDELT Historical Archive (2017→now)
+🦋 Bluesky
+
+🤖 Reddit
+
+▶️ YouTube Comments
+
+🐘 Mastodon
+
+🟠 Hacker News
+
+Telegram Custom Channels
+
+
+all real and the accurate data should be there also the all data all time present 
+with the sentiments with age grp and the geographical map like in which city what people are saying abt that person 
+to identify the person their should selection of the persons or suggestions to identify the right person 
+
+if their should be data of any popular in large data then most liked or reacted data should be their and the their should be remedies how we tackle that issue or similarity matrix in that data range why people get trigger or what should he has to do with that 
+
+i want as many as insights from different sources that are free also the categorized with sources and social media type like news or platforms 
+
+so give me in detailed plan and ui suggestion with login page and the remediations wrt topics give me admin panel and the user stored data or sessions and all give me whole prof plan

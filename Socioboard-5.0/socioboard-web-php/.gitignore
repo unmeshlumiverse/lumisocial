@@ -1,0 +1,11 @@
+# Ignore .env
+
+.env
+
+# Ignore vender
+
+vendor/*
+
+# JetBrains IDE
+config/ide-helper.php
+_ide_helper.php
