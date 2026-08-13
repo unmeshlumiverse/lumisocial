@@ -550,7 +550,14 @@ def get_clean_lang(row):
         return code_map[lang_code]
         
     # Estimate language from text
-    text = (row.get("text") or "") + " " + (row.get("summary") or "")
+    t_val = row.get("text")
+    s_val = row.get("summary")
+    
+    # Handle pandas NaN (which is a float unequal to itself) and None safely
+    t_str = "" if (t_val is None or (isinstance(t_val, float) and t_val != t_val)) else str(t_val)
+    s_str = "" if (s_val is None or (isinstance(s_val, float) and s_val != s_val)) else str(s_val)
+    
+    text = (t_str + " " + s_str).strip()
     text_lower = text.lower()
     
     # Devanagari Script (Marathi & Hindi)
