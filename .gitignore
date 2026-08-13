@@ -1,6 +1,20 @@
-__pycache__/
-*.pyc
-monitor_history.db
+# Secrets & sessions — never commit
+.env
 *.session
 *.session-journal
-.env
+
+# Local data / history
+monitor_history.db
+*.sqlite
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+*.log

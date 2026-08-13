@@ -1,212 +1,200 @@
 # LUMISOCIAL — Public Figure Monitor
 
-A free, cloud-hosted social-listening command center. Type a public figure's name
-(or a `@username` or `#hashtag`) and see what people are saying about them across
-**Indian Newspapers, Google News, GDELT historical archive, Telegram, Twitter/X,
-Bluesky, Reddit, and YouTube** — with sentiment, emotions, a state-wise India
-breakdown, hot topics, top voices, a shareable report, and sentiment trends over
-time.
-
-Live at: **https://lumisocial.streamlit.app/** — runs on Streamlit Community
-Cloud, so it's up 24/7 regardless of whether your own laptop is on (see
-**[Deploying for 24/7 uptime](#-deploying-for-247-uptime-streamlit-community-cloud)**).
+A free, self-hostable **social-listening command center** for tracking a public
+figure or brand. Type a name (or a `@username` / `#hashtag`), and it pulls recent
+public chatter from ten free, terms-compliant sources and turns it into a single
+strategic read: what people think, where the criticism is loudest, how the press
+narrative differs from the street, and what to do about it.
 
 Built to run at **$0** — no paid APIs, no database server, no scraping. Optional
-AI models make it smarter (see **[AI setup](#-ai-setup-optional-but-recommended)**),
-but the app runs fully without them.
+local AI models make it smarter (especially for Hindi and other Indian languages)
+but are never required.
+
+> **⚠️ Read `SECURITY_README.md` first.** This package ships **without** real
+> credentials — the `.env`, the Telegram `.session`, and the local history DB were
+> intentionally removed so the zip is safe to share. Copy `.env.example → .env`
+> and add your own keys (all optional).
 
 ---
 
-## What it does
+## Table of contents
 
-- **Search** by name / keyword, `#hashtag`, or `@username mentions`.
-- **9 sources**: Indian Newspaper RSS (30+ outlets), Google News (6 language editions),
-  **GDELT** (real historical news archive back to 2017 — this is what makes "All
-  Available Data" actually mean all time, not just what's currently published),
-  Telegram, Twitter/X, Bluesky, Reddit, YouTube comments, Mastodon, Hacker News.
-- **Time range that actually filters**: Past 24h / Past Week / Past Month / All
-  Available Data — results are filtered to the selected window (not cosmetic).
-- **Prospect disambiguation**: 3 optional sidebar questions (state/city, org or
-  role, exclude terms) rule out namesakes and rank/badge the posts that actually
-  match the right person — for common names where dozens of unrelated people
-  share it.
-- **Sentiment**: positive / negative / neutral, dominant mood, positivity ratio.
-- **Emotions**: love / joy / anger / hate / fear / sadness, colour-coded.
-- **India state/city detail**: an estimated state- and city-wise sentiment
-  breakdown (inferred from text mentions, not real geolocation — see caveats).
-- **Hot topics & hashtags**, **most-reached voices**, and the **loudest post**
-  (with poster ID + link).
-- **Keyword expansion** (optional): hashtag/name variants + real Wikidata aliases
-  (incl. Hindi/Marathi) to catch more mentions.
-- **Shareable HTML report** you can download and send to your org.
-- **History & trends**: every run is saved so you can chart sentiment over time
-  for the same prospect; schedule headless runs with `scheduled_run.py`.
+1. [The 5-phase workflow](#the-5-phase-workflow)
+2. [What's new in this build](#whats-new-in-this-build)
+3. [Data sources](#data-sources)
+4. [Quick start](#quick-start-2-minutes-no-keys)
+5. [Credentials setup](#credentials-setup-all-optional)
+6. [Optional AI stack](#optional-ai-stack-free-but-heavy)
+7. [History & scheduled runs](#history--scheduled-runs)
+8. [Deploying for 24/7 uptime](#deploying-for-247-uptime)
+9. [Project structure](#project-structure)
+10. [Honest limits — please read](#honest-limits--please-read)
+11. [What is deliberately not included](#what-is-deliberately-not-included)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Quick start (works in 2 minutes, no keys)
+## The 5-phase workflow
+
+The dashboard is organized as a top row of phases. Phase 0 is the default landing
+view; the rest let you drill down.
+
+| Phase | Name | What it's for |
+|-------|------|---------------|
+| **🧭 0** | **Executive Brief** | The one-screen strategic read. Problems first, each paired with a next step, ending in an action plan + forecast. |
+| **📥 1** | **Ingested Feeds** | The raw, unfiltered stream of every post/article collected, with poster ID and link. |
+| **📊 2** | **Sentiment & Topic Analysis** | Deep-dive charts: sentiment split, emotions, hot topics, top voices, India state/city map, per-topic crisis warnings. |
+| **🤖 3** | **Crisis Remediation Desk** | Interactive simulator — pick response levers for a scenario and model the sentiment recovery. |
+| **⚙️ 4** | **Command Center Administration** | Profile validation (social-analyzer), name-origin lookup, and settings. |
+
+### The Executive Brief (Phase 0), section by section
+
+1. **Bottom-line verdict** on the current image, in one line.
+2. **⚠️ What needs attention now** — the loudest criticism surfaced first, with the
+   #1 priority issue called out (topic, negativity %, reach, driving emotion,
+   hottest region and audience).
+3. **🧠 What people actually think** — sentiment donut, emotion breakdown, and the
+   strongest verbatim criticism vs. support side by side.
+4. **📰 Media image vs. 🗣️ public opinion** — splits press coverage (newspapers /
+   Google News / GDELT) from grassroots voice (Reddit, Bluesky, YouTube,
+   Telegram, …) and flags when the two narratives diverge.
+5. **🗺️ Where & 👥 who** — a geographic map of Indian state sentiment (bubble =
+   volume, colour = mood) plus a sentiment-by-age-band chart, naming the priority
+   region and the coldest audience.
+6. **🕸️ The narrative web** — a **topic similarity / co-occurrence matrix** (heatmap)
+   showing which themes are being fused into a single story about the name.
+7. **📈 Image over time** — the trajectory of positivity and dominant emotion across
+   past scans, pulled from saved run history.
+8. **✅ The plan** — a sequenced **Now / 30-day / 60–90-day** plan, each step mapped
+   to a remediation playbook, ending with a **modelled sentiment forecast** and a
+   hand-off to the Phase 3 simulator.
+
+> **Design note.** The brief leads with problems on purpose — surfacing negative
+> signal prominently is the right job for a monitoring tool — but every problem is
+> paired with a concrete next step. It's an honest priority board, not engineered
+> anxiety.
+
+---
+
+## What's new in this build
+
+Four new modules were added on top of the existing app; the mature 1,400-line
+`app.py` was **not** rewritten — only three small hooks were added to wire the new
+landing phase in.
+
+| Module | Adds |
+|--------|------|
+| `brief.py` | The entire Phase 0 Executive Brief view. |
+| `media_analysis.py` | Press-coverage vs. grassroots-opinion split and divergence verdict. |
+| `similarity.py` | The topic co-occurrence / similarity matrix (the heatmap). |
+| `strategy.py` | Priority issue / region / age detection + the sequenced action plan. |
+
+All four are **free, offline, and deterministic** — no network, no paid model.
+
+---
+
+## Data sources
+
+Ten sources, all free and terms-compliant. Enable whichever you want in the sidebar.
+
+| Source | Auth | Notes |
+|--------|------|-------|
+| **Bluesky** | none | Public search, works out of the box. |
+| **Indian Newspapers** | none | 30+ national + regional outlet RSS feeds. |
+| **Google News** | none | Multiple language editions. |
+| **GDELT** | none | Real historical news archive back to 2017 — this is what makes "All Available Data" mean *all time*. |
+| **Mastodon** | none | Public hashtag timeline. |
+| **Hacker News** | none | Via the Algolia API. |
+| **Reddit** | free key | Public subreddits/threads via PRAW (read-only). |
+| **YouTube** | free key | Comments via Data API v3 (10k units/day free). |
+| **Telegram** | free login | Searches public channels you list (Telethon). |
+| **Twitter / X** | free-tier token | API v2 — last ~7 days only (platform limit). |
+
+---
+
+## Quick start (2 minutes, no keys)
 
 ```bash
-cd social_monitor
+cd LUMISOCIAL
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Bluesky needs **no setup** - tick it in the sidebar, type a name, click **Run
-Intelligence Report**. To add the other sources or the AI models, see below.
+Bluesky needs **no setup** — tick it in the sidebar, type a name, and click **Run
+Intelligence Report**. Add the other sources or the AI models as described below.
+
+**Login:** the app opens on a gate screen; the default sandbox credentials are
+shown on that screen.
+
+> **⚠️ If you deploy this publicly (e.g. Streamlit Cloud), change the default
+> admin password first.** `admin@lumisocial.com` / `admin123` is seeded
+> automatically on first run and is printed on the login screen itself — on a
+> public URL that's a published credential, not a secret. It's a `SUPER_ADMIN`
+> account that can create/delete other users and **write real API keys to
+> `.env`** from Phase 4. Log in once, go to **Phase 4 → Team Management**,
+> create your own `SUPER_ADMIN` account, then delete the seeded `admin` user.
 
 ---
 
-## ☁️ Deploying for 24/7 uptime (Streamlit Community Cloud)
+## Credentials setup (all optional)
 
-The app being reachable at all times has nothing to do with your laptop being on
-— once it's deployed on Streamlit Community Cloud, it runs on Streamlit's own
-servers. The one thing that actually needs doing is giving that cloud instance
-your API keys, because **it never reads your local `.env` file** (that file only
-exists on your machine and is gitignored on purpose — it should never be
-committed).
+Copy the template and fill in only the keys you have:
 
-1. Go to [share.streamlit.io](https://share.streamlit.io) → your app (or **New app**
-   pointing at `unmeshlumiverse/lumisocial`, file `app.py`, branch `main`).
-2. Open **Settings → Secrets** and paste your keys in flat TOML (no `[section]`
-   headers — Streamlit mirrors top-level string secrets into `os.environ`, which
-   is what every connector in this repo reads from):
-   ```toml
-   YOUTUBE_API_KEY = "..."
-   REDDIT_CLIENT_ID = "..."
-   REDDIT_CLIENT_SECRET = "..."
-   REDDIT_USER_AGENT = "lumisocial by u/yourusername"
-   TWITTER_BEARER_TOKEN = "..."
-   TELEGRAM_API_ID = "..."
-   TELEGRAM_API_HASH = "..."
-   ```
-   (Only add the keys for sources you actually use — every connector degrades
-   gracefully and shows a sidebar warning if its key is missing, it never crashes
-   the app.)
-3. Save. Streamlit redeploys automatically and the app is live at your
-   `*.streamlit.app` URL for anyone with the link — no laptop required, and it
-   redeploys automatically on every push to `main`.
-4. Streamlit Cloud's free tier sleeps an app after ~long inactivity; the **first**
-   visit after that wakes it up in a few seconds. That's a cold-start delay, not
-   downtime — the app and its code are always there, just spun down to save
-   resources when nobody's using it.
-5. Telegram is the one source that can't be configured through secrets alone —
-   it needs the one-time interactive login (`python telegram_login.py`) run
-   locally first, and the resulting `monitor.session` file uploaded alongside the
-   repo (or re-run whenever the cloud instance's ephemeral disk resets it).
+```bash
+cp .env.example .env
+```
+
+Every connector **degrades gracefully** — if a key is missing, that source shows a
+friendly "setup" card and is skipped; nothing crashes, and the no-auth sources keep
+working. See `api_credentials_guide.md` for step-by-step provider instructions.
+
+- **Reddit** — create a *script* app at <https://www.reddit.com/prefs/apps>, then set
+  `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`.
+- **YouTube** — enable *YouTube Data API v3* at <https://console.cloud.google.com/>,
+  create an API key, set `YOUTUBE_API_KEY`.
+- **Twitter / X** — set `TWITTER_BEARER_TOKEN` from <https://developer.x.com/>.
+- **Telegram** — get `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` at
+  <https://my.telegram.org>, then run the one-time login:
+  ```bash
+  python telegram_login.py
+  ```
+  This creates a `monitor.session` file (reused automatically afterwards). In the
+  sidebar, list the public channels to search — Telegram has no global search, so
+  you choose which public channels to monitor.
 
 ---
 
-## 🧠 AI setup (optional, but recommended)
+## Optional AI stack (free, but heavy)
 
 The app ships with fast, free defaults (VADER for sentiment, a keyword lexicon for
-emotion, TF-IDF for clustering). The **AI models are also free of cost**, but they
-are **heavier** - they download once (~1 GB total across models) and need more RAM
-and CPU. They make the analysis noticeably smarter, especially for **Hindi and
-other Indian languages**, which the default VADER cannot read at all.
-
-### 1. Install the AI stack
+emotion, TF-IDF for clustering). The AI models are **also free of money cost**, but
+they're **heavier** — a one-time ~1 GB download and more RAM/CPU — and noticeably
+smarter, especially for Hindi and other Indian languages that VADER can't read.
 
 ```bash
 pip install -r requirements-ai.txt
 ```
 
-This installs `transformers`, `torch`, and `sentence-transformers`.
+Then set the sidebar **Sentiment engine** to **AI multilingual** (or **Ensemble**).
+That one switch upgrades all three layers:
 
-### 2. Turn it on
+| Feature | Default (instant) | With AI stack (heavier) |
+|---------|-------------------|--------------------------|
+| Sentiment | VADER (English only) | `cardiffnlp/twitter-xlm-roberta-base-sentiment` — multilingual, reads Hindi, better on sarcasm |
+| Emotion | keyword lexicon | `SamLowe/roberta-base-go_emotions` — 28 emotions mapped to our set |
+| Narratives | TF-IDF + KMeans | `paraphrase-multilingual-MiniLM-L12-v2` embeddings + KMeans |
 
-In the sidebar, set **Sentiment engine** to **AI multilingual** (or **Ensemble**).
-That single switch activates all three AI upgrades at once:
-
-| Feature    | Default (free, instant) | With AI stack (free, heavier)                          |
-|------------|-------------------------|--------------------------------------------------------|
-| Sentiment  | VADER (English only)    | `cardiffnlp/twitter-xlm-roberta-base-sentiment` - multilingual, reads Hindi, better on sarcasm |
-| Emotion    | keyword lexicon         | `SamLowe/roberta-base-go_emotions` - 28 fine-grained emotions mapped to our 7 |
-| Narratives | TF-IDF + KMeans         | `paraphrase-multilingual-MiniLM-L12-v2` embeddings + KMeans - semantic, multilingual |
-
-### 3. What happens on first run
-
-The first analysis after enabling AI will **download the models** (one-time, a few
-minutes). Later runs reuse the cached models. Scoring is slower than the defaults
-but far more accurate.
-
-### 4. It never breaks
-
-If the AI libraries aren't installed, or a model fails to load, the app **silently
-falls back** to VADER + lexicon + TF-IDF and shows a note. You can always run at
-$0 with zero AI dependencies.
-
-> **Tip:** the AI models run entirely on your machine - nothing is sent to any
-> paid API. "Free but heavy" means disk/RAM/CPU cost, not money.
+Models download once on first use, then cache. If the AI libraries aren't installed
+or a model fails to load, the app **silently falls back** to the free defaults. The
+models run entirely on your machine — nothing is sent to any paid API.
 
 ---
 
-## Data source setup
-
-Each source is optional; enable what you want in the sidebar.
-
-### Bluesky - no setup
-Public search needs no account or key. Just tick it.
-
-### Reddit - free app (2 min)
-1. Go to <https://www.reddit.com/prefs/apps> -> **create another app** -> type **script**.
-2. Copy the **client ID** (under the app name) and the **secret**.
-3. Set environment variables:
-   ```bash
-   export REDDIT_CLIENT_ID="your_id"
-   export REDDIT_CLIENT_SECRET="your_secret"
-   export REDDIT_USER_AGENT="org-monitor by u/yourusername"
-   ```
-   (Windows: use `set` instead of `export`.)
-
-### YouTube - free API key
-1. In <https://console.cloud.google.com/> create a project, enable **YouTube Data API v3**, make an API key.
-2. ```bash
-   export YOUTUBE_API_KEY="your_key"
-   ```
-   Free quota (10,000 units/day) is plenty. It finds top videos about your term and analyses their comments.
-
-### Google News - no key
-Tick **Google News** and pick an edition (India / US / UK). That's it.
-
-### Telegram - user login (one-time)
-1. Get `api_id` + `api_hash` free at <https://my.telegram.org>.
-2. ```bash
-   export TELEGRAM_API_ID="12345"
-   export TELEGRAM_API_HASH="your_hash"
-   ```
-3. Authorize once (enter phone + the code Telegram sends):
-   ```bash
-   python telegram_login.py
-   ```
-   This creates `monitor.session`, reused automatically afterwards.
-4. In the sidebar, tick **Telegram** and list the public channel usernames to
-   search (one per line, e.g. `ndtv`, `indiatoday`). Telegram has no global search,
-   so you choose which public channels to monitor.
-
-> **Tip:** put the `export` lines in a `.env` you `source` before running, or in
-> your shell profile, so you don't retype them.
-
----
-
-## Running the dashboard
-
-```bash
-streamlit run app.py
-```
-
-Enter a term in the sidebar, choose sources and the sentiment engine, optionally
-tick **Expand search**, and click **Run analysis**. Download the HTML report or CSV
-from the buttons at the bottom.
-
----
-
-## History & scheduled runs (trends over time)
+## History & scheduled runs
 
 Every dashboard run auto-saves an aggregate snapshot to a local SQLite file
-(`monitor_history.db`). Run the same term again to build a trend line; the
-dashboard's **History & trends** section charts sentiment, positivity, and volume
-over time.
+(`monitor_history.db`, created on first run). Re-running the same term builds a
+trend line, which powers the "Image over time" section of the brief.
 
 For automatic tracking, schedule headless runs:
 
@@ -216,103 +204,154 @@ python scheduled_run.py "#SomeTopic" --type hashtag --sources bluesky --limit 80
 python scheduled_run.py "Name" --sources bluesky,telegram --tg-channels ndtv,indiatoday
 ```
 
-Cron example (every day at 9am):
+Cron example (daily at 9am):
 
 ```cron
-0 9 * * *  cd /path/to/social_monitor && /usr/bin/python scheduled_run.py "Name" --sources bluesky,reddit,news
+0 9 * * *  cd /path/to/LUMISOCIAL && /usr/bin/python scheduled_run.py "Name" --sources bluesky,reddit,news
 ```
 
 Change the DB location with `export MONITOR_DB=/path/to/history.db`.
 
 ---
 
+## Deploying for 24/7 uptime
+
+Deployed on **Streamlit Community Cloud**, the app runs on Streamlit's servers —
+reachable regardless of whether your laptop is on.
+
+1. Push the repo to GitHub, then create an app at
+   [share.streamlit.io](https://share.streamlit.io) pointing at `app.py`, branch `main`.
+2. In **Settings → Secrets**, paste your keys as flat TOML (no `[section]` headers —
+   Streamlit mirrors top-level secrets into `os.environ`, which every connector reads):
+   ```toml
+   YOUTUBE_API_KEY = "..."
+   REDDIT_CLIENT_ID = "..."
+   REDDIT_CLIENT_SECRET = "..."
+   REDDIT_USER_AGENT = "lumisocial by u/yourusername"
+   TWITTER_BEARER_TOKEN = "..."
+   TELEGRAM_API_ID = "..."
+   TELEGRAM_API_HASH = "..."
+   ```
+   Add only the keys for sources you use.
+3. Save — Streamlit redeploys automatically on every push to `main`.
+4. The free tier sleeps an idle app; the first visit wakes it in a few seconds
+   (cold start, not downtime).
+5. Telegram needs the one-time local login (`python telegram_login.py`) and its
+   `monitor.session` uploaded alongside the repo, since secrets alone can't authorize it.
+
+> **Never commit `.env` or `*.session`.** The included `.gitignore` already excludes them.
+
+---
+
 ## Project structure
 
 ```
-app.py               # Streamlit dashboard (the single screen)
-pipeline.py          # fetch -> score -> aggregate engine
-connectors/
-  bluesky.py         # free public search, no auth
-  reddit.py          # PRAW read-only
-  youtube.py         # comments via YouTube Data API v3, relevance+date+viewCount sweep
-  telegram.py        # Telethon, searches public channels
-  twitter.py         # official API v2 (last ~7 days only - platform limit)
-  news.py            # Google News RSS, multi-window + multi-language (no key)
-  indian_news.py      # 30+ Indian newspaper RSS feeds, national + regional (no key)
-  gdelt.py            # GDELT DOC 2.0 API - real historical archive back to 2017 (no key)
-  mastodon.py        # public hashtag timeline (no auth)
-  hackernews.py      # HN via Algolia API (no key)
-sentiment.py         # VADER + optional multilingual AI (auto-fallback)
-emotion.py           # keyword lexicon + optional AI GoEmotions (auto-fallback)
-analysis.py          # hot topics, region/country estimate, top voices
-narratives.py        # clusters posts into themes (AI embeddings / TF-IDF / keyword)
-keywords.py          # query expansion: rule variants + Wikidata aliases
-report.py            # builds the downloadable HTML report
-storage.py           # SQLite run-history storage (trends)
-scheduled_run.py     # cron-friendly headless run -> history DB
-telegram_login.py    # one-time Telegram authorization
-test_engine.py       # offline smoke test (no network needed)
-requirements.txt     # core deps ($0, always installed)
-requirements-ai.txt  # optional AI add-ons (free but heavy)
+LUMISOCIAL/
+├── app.py                    # Streamlit dashboard — the 5-phase command center
+│
+│   # ── new strategic layer ──
+├── brief.py                  # Phase 0 Executive Brief (the strategic read)
+├── media_analysis.py         # press-coverage vs. grassroots-opinion split
+├── similarity.py             # topic co-occurrence / similarity matrix
+├── strategy.py               # priority issue/region/age + sequenced action plan
+│
+│   # ── core engine ──
+├── pipeline.py               # collect → normalize → score → enrich engine
+├── sentiment.py              # VADER + optional multilingual AI (auto-fallback)
+├── emotion.py                # keyword lexicon + optional AI GoEmotions (auto-fallback)
+├── narratives.py             # theme clustering (AI embeddings / TF-IDF / keyword)
+├── analysis.py               # hot topics, India state/region inference, top voices
+├── demographics.py           # heuristic age-band inference from text/platform
+├── keywords.py               # query expansion via rules + Wikidata aliases
+├── remediation.py            # Phase 3 crisis scenarios + recovery simulator
+├── storage.py                # SQLite run-history storage (trends)
+├── report.py                 # downloadable HTML report builder
+│
+│   # ── connectors (all free/compliant) ──
+├── connectors/
+│   ├── bluesky.py            # public search, no auth
+│   ├── indian_news.py        # 30+ Indian newspaper RSS feeds
+│   ├── news.py               # Google News RSS, multi-language
+│   ├── gdelt.py              # GDELT DOC 2.0 — historical archive back to 2017
+│   ├── mastodon.py           # public hashtag timeline
+│   ├── hackernews.py         # HN via Algolia API
+│   ├── reddit.py             # PRAW read-only
+│   ├── youtube.py            # comments via YouTube Data API v3
+│   ├── telegram.py           # Telethon, public channels
+│   └── twitter.py            # official API v2 (last ~7 days)
+│
+│   # ── OSINT sub-package (profile validator, Phase 4) ──
+├── social-analyzer/          # bundled; imported by social_analyzer_helper.py
+├── social_analyzer_helper.py # username validation + name-origin lookup (fail-safe)
+│
+│   # ── ops & docs ──
+├── scheduled_run.py          # cron-friendly headless run → history DB
+├── telegram_login.py         # one-time Telegram authorization
+├── requirements.txt          # core deps ($0, always installed)
+├── requirements-ai.txt       # optional AI add-ons (free but heavy)
+├── .env.example              # credential template (copy to .env)
+├── .gitignore                # excludes secrets, sessions, DB, caches
+├── SECURITY_README.md        # what was stripped and how to handle keys
+├── api_credentials_guide.md  # step-by-step provider setup
+├── project_overview.md       # design notes
+└── sample_report.html        # example of the exported report
 ```
 
-Test the engine without network access:
-```bash
-python test_engine.py
-```
+The `social-analyzer` sub-package is optional at runtime: if it (or a heavy
+dependency) is unavailable, the profile validator degrades to a clear message
+instead of taking down the dashboard.
 
 ---
 
-## What is NOT available for free (and why)
+## Honest limits — please read
+
+- **Geography is inference, not GPS.** Bluesky, Reddit, YouTube, Telegram, and news
+  feeds don't attach location to posts. Countries and Indian states/cities are
+  inferred from place names and language in the text, so many posts are "Unknown"
+  and the map is **directional only**. Don't present it to your org as precise
+  geography — real per-user location needs a paid data provider.
+- **Age bands are inferred, not verified.** Age is a heuristic guess from language
+  and platform cues, not any demographic API. Treat it as directional.
+- **The forecast is a model, not a promise.** The recovery projection is a
+  deterministic directional estimate of how sentiment might move if the suggested
+  levers are pulled — not a guarantee.
+- **Results are a sample, not the whole platform.** Each run reflects the recent
+  public posts the free APIs return, not every post ever made.
+- **No tool delivers "100% accurate" monitoring.** Always verify important claims at
+  the original source.
+- **Scope:** built for **public figures and brands**. Keep to public content and each
+  platform's API terms; don't repurpose it to profile private individuals.
+
+---
+
+## What is deliberately not included
 
 Some platforms have no free, terms-compliant way to search public posts about a
-person, so they are **deliberately not included**:
+third party, so they're intentionally excluded rather than scraped:
 
 - **Facebook / Instagram** — Meta's Graph API only returns *your own* pages/accounts;
-  there is no public post/mention search for third parties. Not possible for free.
+  no public third-party mention search exists.
 - **LinkedIn** — no third-party API for searching public posts, at any price.
-- **X / Twitter** — reading is paid (per-post or enterprise), not free.
+- **X / Twitter** — full reading access is paid; the free-tier connector is included
+  but limited to ~7 days.
 
-Instead, this project uses seven sources that *are* free and compliant. If you have
-budget later, a paid data provider can add the platforms above through one API.
-
-Also note: **no tool delivers "100% accurate" news.** This app aggregates recent
-coverage from Google News (multiple publishers); always verify important claims at
-the original source.
-
-## Honest caveats (please read)
-
-- **The world map is an estimate, not real geolocation.** Bluesky/Reddit/YouTube/
-  Telegram/News do **not** attach location to posts. Countries are guessed from
-  language and keywords in the text, so most posts show as "Unknown" and the map is
-  directional only. True per-country data needs a paid data provider - there's no
-  free path to real geolocation on these networks. Don't present the map to your org
-  as precise geography. The India state/city breakdown is likewise inferred from place names mentioned in the text, not from where users actually are.
-- **AI models are free of money cost, but heavy** (large one-time downloads, more
-  RAM/CPU, slower). They're optional and off by default; the app always works
-  without them.
-- **Results are a sample, not the whole platform.** Each run reflects recent public
-  posts the free APIs return, not every post ever made.
-- **Scope:** built for monitoring **public figures / brands**. Keep to public
-  content and each platform's API terms. Don't repurpose it to profile private
-  individuals.
-
----
-
-## Adding more sources or upgrading models
-
-- **New platform:** add a file in `connectors/` with a `search_x(query, limit)`
-  function returning the same dict shape (see `pipeline.NORMALIZED_FIELDS`), then
-  add it to the `sources` dict in `app.py`. Good free candidate: Mastodon.
-- **Better sentiment/emotion:** swap the model name constants in `sentiment.py` /
-  `emotion.py` for any compatible Hugging Face model.
+If you add budget later, a paid data provider can bring these platforms in through a
+single API without changing the rest of the app.
 
 ---
 
 ## Troubleshooting
 
-- **"AI models not installed - using VADER"**: run `pip install -r requirements-ai.txt`.
-- **First AI run is slow / seems stuck**: it's downloading models; wait a few minutes once.
-- **Reddit/YouTube/Telegram errors in the sidebar**: a credential env var is missing - recheck the setup above.
-- **Telegram "session not authorized"**: run `python telegram_login.py` once.
-- **No posts found**: try a broader term, enable **Expand search**, or add more sources.
+| Symptom | Fix |
+|---------|-----|
+| "AI models not installed — using VADER" | `pip install -r requirements-ai.txt` |
+| First AI run slow / seems stuck | It's downloading models once; wait a few minutes. |
+| Reddit / YouTube / Telegram error in sidebar | A credential env var is missing — recheck `.env`. |
+| Telegram "session not authorized" | Run `python telegram_login.py` once. |
+| Profile validator unavailable in Phase 4 | The `social-analyzer` sub-package or a dep didn't load; the rest of the app is unaffected. |
+| No posts found | Try a broader term, enable **Expand search**, or add more sources. |
+
+---
+
+*Runs at $0 with no keys at all — keyed connectors just add Reddit, YouTube,
+Telegram, and X coverage on top of the free defaults.*

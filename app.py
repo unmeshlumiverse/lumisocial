@@ -31,9 +31,28 @@ from demographics import summarize_demographics
 from narratives import detect_narratives
 from report import build_html_report
 
-# Import helper integrations
-from social_analyzer_helper import verify_profile_username, analyze_name
+# Import helper integrations.
+# The social-analyzer OSINT sub-package is optional: if it (or one of its heavier
+# dependencies) is unavailable, the profile-validator feature degrades to a clear
+# message instead of taking down the whole intelligence dashboard.
+try:
+    from social_analyzer_helper import verify_profile_username, analyze_name
+    _SOCIAL_ANALYZER_OK = True
+except Exception as _sa_err:  # noqa: BLE001
+    _SOCIAL_ANALYZER_OK = False
+    _SOCIAL_ANALYZER_ERR = str(_sa_err)
+
+    def verify_profile_username(username, platforms=None):
+        return {"detected": [], "unknown": [], "failed": [],
+                "error": "social-analyzer package not available on this host"}
+
+    def analyze_name(name):
+        return []
+
 from remediation import REMEDIATION_SCENARIOS, simulate_remediation
+
+# Executive Strategy Brief (issues-first landing view + strategic plan)
+import brief
 
 # Import Connectors
 from connectors.bluesky import search_bluesky
@@ -558,6 +577,7 @@ def get_clean_lang(row):
 
 # ==================== OPERATIONS PANEL DESK ====================
 phase_options = [
+    "🧭 Phase 0: Executive Brief",
     "📥 Phase 1: Ingested Feeds",
     "📊 Phase 2: Sentiment & Topic Analysis",
     "🤖 Phase 3: Crisis Remediation Desk",
@@ -590,7 +610,7 @@ if _top_selected != st.session_state["dashboard_phase"]:
 
 st.markdown("<div style='height:2px; background:linear-gradient(90deg,#6366f1,#38bdf8,#10b981); border-radius:2px; margin-bottom:12px;'></div>", unsafe_allow_html=True)
 
-if st.session_state["dashboard_phase"] in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment & Topic Analysis", "🤖 Phase 3: Crisis Remediation Desk"]:
+if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment & Topic Analysis", "🤖 Phase 3: Crisis Remediation Desk"]:
     st.markdown("#### 🔍 Social Ingestion & Listening Engine")
     
     # Query builder selection
@@ -761,7 +781,10 @@ if st.session_state["dashboard_phase"] in ["📥 Phase 1: Ingested Feeds", "📊
             avg_score = stats["avg_score"]
             
 
-            if st.session_state["dashboard_phase"] == "📥 Phase 1: Ingested Feeds":
+            if st.session_state["dashboard_phase"] == "🧭 Phase 0: Executive Brief":
+                brief.render_executive_brief(df, stats, report, report["term"])
+
+            elif st.session_state["dashboard_phase"] == "📥 Phase 1: Ingested Feeds":
 
                 st.markdown("#### 📬 Ingested Social & News Streams")
                 
@@ -1043,7 +1066,13 @@ if st.session_state["dashboard_phase"] in ["📥 Phase 1: Ingested Feeds", "📊
                             st.markdown("\n".join(line.strip() for line in warn_html.split("\n")), unsafe_allow_html=True)
                         with col_act:
                             if st.button(f"⚡ Deploy PR Plan: '{w}'", key=f"remed_btn_{w}", use_container_width=True):
+                                # Must also set the radio widget's own key (phase_radio_top), not just
+                                # dashboard_phase — st.radio(index=...) is only honored on a widget's
+                                # very first render; once "phase_radio_top" has stored state, the radio
+                                # keeps showing its last value and immediately overwrites dashboard_phase
+                                # back on the next run, silently undoing this navigation otherwise.
                                 st.session_state["dashboard_phase"] = "🤖 Phase 3: Crisis Remediation Desk"
+                                st.session_state["phase_radio_top"] = "🤖 Phase 3: Crisis Remediation Desk"
                                 st.session_state["remediation_selected_scenario"] = sc_key
                                 st.toast(f"Switched phase to Crisis Remediation Desk for '{w}'")
                                 st.rerun()
@@ -1295,16 +1324,29 @@ elif st.session_state["dashboard_phase"] == "⚙️ Phase 4: Command Center Admi
             if check_profile:
                 if not sa_username:
                     st.warning("Please enter a username handle.")
+                elif not _SOCIAL_ANALYZER_OK:
+                    st.error(f"Profile validator unavailable on this host: {_SOCIAL_ANALYZER_ERR}")
                 else:
                     with st.spinner(f"Verifying username '{sa_username}' on {sa_platform.upper()}..."):
-                        is_valid, profile_url, details = verify_profile_username(sa_username, sa_platform)
-                        
-                    if is_valid:
-                        st.success(f"Profile verified and active on {sa_platform.upper()}!")
-                        st.markdown(f"🔗 [View Profile Handle Link]({profile_url})")
-                        st.info(f"Metadata summary: {details}")
+                        # verify_profile_username returns a dict — {"detected": [...], "error": "..."} —
+                        # not a fixed-size tuple, and the "unknown"/"failed" keys are only present some
+                        # of the time (social-analyzer deletes empty keys), so unpack defensively.
+                        result = verify_profile_username(sa_username, [sa_platform])
+
+                    if result.get("error"):
+                        st.error(f"Profile validator error: {result['error']}")
                     else:
-                        st.error(f"Handle profile '{sa_username}' not found or unreachable on {sa_platform.upper()}. Check typing.")
+                        detected = result.get("detected") or []
+                        if detected:
+                            st.success(f"Profile verified and active on {sa_platform.upper()}!")
+                            for item in detected:
+                                link = item.get("link") or item.get("url") or ""
+                                rate = item.get("rate", "")
+                                status = item.get("status", "")
+                                st.markdown(f"🔗 [{link or 'View profile'}]({link})" if link else "🔗 Profile detected (no direct link returned)")
+                                st.caption(f"Confidence: {rate} · Status: {status}")
+                        else:
+                            st.error(f"Handle profile '{sa_username}' not found or unreachable on {sa_platform.upper()}. Check typing.")
                         
         with sa_col2:
             st.markdown("##### Name Origin & Gender Estimator")
