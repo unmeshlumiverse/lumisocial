@@ -566,20 +566,31 @@ phase_options = [
 
 if "dashboard_phase" not in st.session_state:
     st.session_state["dashboard_phase"] = phase_options[0]
-    
+
 if st.session_state["dashboard_phase"] not in phase_options:
     st.session_state["dashboard_phase"] = phase_options[0]
-    
-phase_idx = phase_options.index(st.session_state["dashboard_phase"])
-selected_phase = st.radio("Operations Phase Select", phase_options, index=phase_idx, horizontal=True, label_visibility="collapsed")
-st.session_state["dashboard_phase"] = selected_phase
-st.divider()
 
 # Load targets globally
 targets = storage.list_targets()
 target_names = [t["name"] for t in targets]
 
-if selected_phase in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment & Topic Analysis", "🤖 Phase 3: Crisis Remediation Desk"]:
+# ---- Always-visible top-level phase switcher ----
+_top_phase_idx = phase_options.index(st.session_state["dashboard_phase"])
+_top_selected = st.radio(
+    "🗂️ Operations Phase",
+    phase_options,
+    index=_top_phase_idx,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="phase_radio_top"
+)
+if _top_selected != st.session_state["dashboard_phase"]:
+    st.session_state["dashboard_phase"] = _top_selected
+    st.rerun()
+
+st.markdown("<div style='height:2px; background:linear-gradient(90deg,#6366f1,#38bdf8,#10b981); border-radius:2px; margin-bottom:12px;'></div>", unsafe_allow_html=True)
+
+if st.session_state["dashboard_phase"] in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment & Topic Analysis", "🤖 Phase 3: Crisis Remediation Desk"]:
     st.markdown("#### 🔍 Social Ingestion & Listening Engine")
     
     # Query builder selection
@@ -749,7 +760,9 @@ if selected_phase in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment &
             positivity = stats["positivity_ratio"]
             avg_score = stats["avg_score"]
             
-            if selected_phase == "📥 Phase 1: Ingested Feeds":
+
+            if st.session_state["dashboard_phase"] == "📥 Phase 1: Ingested Feeds":
+
                 st.markdown("#### 📬 Ingested Social & News Streams")
                 
                 feed_tab1, feed_tab2 = st.tabs(["📱 Social Media Feeds", "📰 News & Press Feeds"])
@@ -857,7 +870,7 @@ if selected_phase in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment &
                                 else:
                                     st.markdown(card_content, unsafe_allow_html=True)
                                     
-            elif selected_phase == "📊 Phase 2: Sentiment & Topic Analysis":
+            elif st.session_state["dashboard_phase"] == "📊 Phase 2: Sentiment & Topic Analysis":
                 st.markdown("#### 📈 Deep Sentiment & Hot Topics Analysis")
                 
                 # Render polarity metrics row
@@ -1035,7 +1048,7 @@ if selected_phase in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment &
                                 st.toast(f"Switched phase to Crisis Remediation Desk for '{w}'")
                                 st.rerun()
                                 
-            elif selected_phase == "🤖 Phase 3: Crisis Remediation Desk":
+            elif st.session_state["dashboard_phase"] == "🤖 Phase 3: Crisis Remediation Desk":
                 st.markdown("#### 🛡️ Public Image & Remediation Simulator")
                 
                 positivity = stats["positivity_ratio"]
@@ -1204,7 +1217,7 @@ if selected_phase in ["📥 Phase 1: Ingested Feeds", "📊 Phase 2: Sentiment &
         st.info("💡 Please onboard monitored profiles or enter keywords and run a social listening scan to see analysis data.")
 
 # ==================== PHASE 4: COMMAND CENTER ADMINISTRATION ====================
-elif selected_phase == "⚙️ Phase 4: Command Center Administration":
+elif st.session_state["dashboard_phase"] == "⚙️ Phase 4: Command Center Administration":
     st.markdown("### ⚙️ Command Center Administration Desk")
     st.caption("Manage target figure keywords, check profile handles, seat provisioning, and environment API credentials.")
     
