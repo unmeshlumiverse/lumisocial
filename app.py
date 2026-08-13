@@ -229,9 +229,7 @@ st.markdown("""
         box-shadow: 0 0 0 3px var(--accent-glow) !important;
     }
     /* Streamlit forms submit button styling */
-    div[data-testid="stForm"] button,
-    div[data-testid="stForm"] button[data-testid="baseButton-secondary"],
-    div[data-testid="stForm"] [data-baseweb="button"] {
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
         background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
         color: #ffffff !important;
         font-weight: 800 !important;
@@ -245,19 +243,15 @@ st.markdown("""
         cursor: pointer !important;
         margin-top: 15px !important;
     }
-    div[data-testid="stForm"] button:hover {
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {
         transform: translateY(-2px) !important;
         box-shadow: 0 8px 25px rgba(13, 148, 136, 0.45) !important;
         background: linear-gradient(135deg, #14b8a6 0%, var(--accent) 100%) !important;
     }
-    div[data-testid="stForm"] button p {
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button p {
         color: #ffffff !important;
         font-weight: 800 !important;
         font-size: 1rem !important;
-    }
-    div[data-testid="stForm"] button[type="submit"]:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 24px rgba(13, 148, 136, 0.4) !important;
     }
 
     /* ============ Active Connection Grid ============ */
