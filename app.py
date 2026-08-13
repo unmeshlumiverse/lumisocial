@@ -59,30 +59,70 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for exact Executive Command Center styling, legible inputs, and sleek cards
+# Modern design system — CSS custom properties so the whole palette/spacing
+# scale is defined once and every component below just references it.
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
+
+    :root {
+        --bg: #f6f8fb;
+        --surface: #ffffff;
+        --surface-2: #f8fafc;
+        --border: #e6eaf0;
+        --border-soft: #eef1f6;
+        --text: #0f172a;
+        --text-2: #475569;
+        --text-mute: #94a3b8;
+        --accent: #0d9488;
+        --accent-dark: #0f766e;
+        --accent-light: #ccfbf1;
+        --accent-glow: rgba(13, 148, 136, 0.16);
+        --pos: #10b981;
+        --pos-bg: #ecfdf5;
+        --pos-border: #a7f3d0;
+        --neg: #ef4444;
+        --neg-bg: #fef2f2;
+        --neg-border: #fecaca;
+        --neu: #f59e0b;
+        --neu-bg: #fffbeb;
+        --neu-border: #fde68a;
+        --info: #0284c7;
+        --info-bg: #f0f9ff;
+        --r-sm: 8px;
+        --r-md: 12px;
+        --r-lg: 16px;
+        --shadow-1: 0 1px 2px rgba(15,23,42,0.04);
+        --shadow-2: 0 2px 8px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+        --shadow-3: 0 8px 24px rgba(15,23,42,0.08);
+    }
+
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #334155;
+        color: var(--text-2);
     }
-    
-    .stApp {
-        background-color: #f8fafc;
-    }
-    
-    /* Left Sidebar Styling */
+
+    .stApp { background-color: var(--bg); }
+
+    /* Tighter, calmer default vertical rhythm */
+    .block-container { padding-top: 1.6rem; padding-bottom: 2.5rem; }
+
+    /* ============ Sidebar — deep slate "command console" ============ */
     [data-testid="stSidebar"] {
-        background-color: #00875a !important;
+        background: linear-gradient(180deg, #0b1220 0%, #101a2e 55%, #0d1526 100%) !important;
+        border-right: 1px solid rgba(255,255,255,0.06);
     }
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span {
+    [data-testid="stSidebar"] h4, [data-testid="stSidebar"] h5 {
         color: #ffffff !important;
     }
-    /* Ensure text inside input and select fields is dark, crisp and clearly readable */
-    [data-testid="stSidebar"] input, 
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stCaption {
+        color: #b6c2d9 !important;
+    }
+    [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.1) !important; }
+
+    [data-testid="stSidebar"] input,
     [data-testid="stSidebar"] textarea,
     [data-testid="stSidebar"] [data-baseweb="input"] input,
     [data-testid="stSidebar"] [data-baseweb="select"] * {
@@ -90,270 +130,269 @@ st.markdown("""
         background-color: #ffffff !important;
         font-weight: 600 !important;
     }
-    [data-testid="stSidebar"] .stButton > button,
-    [data-testid="stSidebar"] .stButton > button p,
-    [data-testid="stSidebar"] .stButton > button span,
-    [data-testid="stSidebar"] .stButton > button div,
-    [data-testid="stSidebar"] .stButton > button * {
-        color: #00875a !important;
-        font-weight: 800 !important;
-        font-size: 0.95rem !important;
+    [data-testid="stSidebar"] [data-baseweb="input"],
+    [data-testid="stSidebar"] [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] [data-baseweb="base-input"] {
+        border-radius: var(--r-sm) !important;
+        border: 1px solid transparent !important;
     }
+    [data-testid="stSidebar"] [data-testid="stCheckbox"] label span {
+        color: #d7e0f0 !important;
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: var(--r-sm);
+    }
+    [data-testid="stSidebar"] [data-testid="stContainer"] {
+        border-color: rgba(255,255,255,0.1) !important;
+    }
+
     [data-testid="stSidebar"] .stButton > button {
-        background-color: #ffffff !important;
-        border-radius: 8px !important;
-        border: 2px solid #ffffff !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.18) !important;
-        padding: 8px 16px !important;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
+        border-radius: var(--r-sm) !important;
+        border: none !important;
+        box-shadow: 0 6px 18px rgba(13, 148, 136, 0.35) !important;
+        padding: 10px 16px !important;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
     }
-    [data-testid="stSidebar"] .stButton > button:hover,
-    [data-testid="stSidebar"] .stButton > button:hover * {
-        background-color: #f8fafc !important;
-        color: #005a3c !important;
+    [data-testid="stSidebar"] .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(13, 148, 136, 0.45) !important;
     }
-    
-    /* Command Center Upper Section Card */
-    .auris-upper-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 18px 20px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    [data-testid="stSidebar"] .stButton > button * { color: #ffffff !important; }
+
+    /* ============ Generic surfaces ============ */
+    .auris-upper-card, .filter-panel-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 20px 22px;
+        box-shadow: var(--shadow-1);
         margin-bottom: 20px;
+        transition: box-shadow 0.15s ease;
     }
-    
+    .auris-upper-card:hover { box-shadow: var(--shadow-2); }
+
     .auris-section-title {
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 10px;
+        color: var(--text);
+        margin-bottom: 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        letter-spacing: -0.01em;
     }
-    
-    /* Word Cloud Tag Styling */
+
+    /* ============ Word Cloud ============ */
     .topic-tag-cloud {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px 12px;
+        gap: 10px 14px;
         align-items: center;
         justify-content: flex-start;
         padding: 8px 0;
         min-height: 180px;
     }
-    .tag-xl { font-size: 1.35rem; font-weight: 800; color: #1e293b; }
-    .tag-lg { font-size: 1.1rem; font-weight: 700; color: #334155; }
-    .tag-md { font-size: 0.92rem; font-weight: 600; color: #64748b; }
-    .tag-sm { font-size: 0.8rem; font-weight: 500; color: #94a3b8; }
-    
-    /* Influencer Badge Row */
+    .tag-xl { font-size: 1.4rem; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
+    .tag-lg { font-size: 1.12rem; font-weight: 700; color: #334155; }
+    .tag-md { font-size: 0.92rem; font-weight: 600; color: var(--text-2); }
+    .tag-sm { font-size: 0.8rem; font-weight: 500; color: var(--text-mute); }
+
+    /* ============ Influencer Row ============ */
     .influencer-row {
         display: flex;
-        gap: 12px;
+        gap: 14px;
         align-items: center;
         justify-content: flex-start;
         margin-top: 14px;
         flex-wrap: wrap;
     }
-    .influencer-card {
-        text-align: center;
-    }
+    .influencer-card { text-align: center; }
     .influencer-avatar {
-        width: 44px;
-        height: 44px;
+        width: 46px;
+        height: 46px;
         border-radius: 50%;
-        background: #e2e8f0;
+        background: linear-gradient(135deg, var(--accent-light), #e0f2fe);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 700;
+        font-weight: 800;
         font-size: 0.85rem;
-        color: #475569;
-        margin: 0 auto 4px auto;
-        border: 2px solid #ffffff;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        color: var(--accent-dark);
+        margin: 0 auto 6px auto;
+        border: 2px solid var(--surface);
+        box-shadow: var(--shadow-2);
         position: relative;
     }
     .platform-sub-icon {
         position: absolute;
         bottom: -2px;
         right: -2px;
-        background: #00875a;
+        background: var(--accent);
         color: white;
         border-radius: 50%;
-        width: 16px;
-        height: 16px;
+        width: 17px;
+        height: 17px;
         font-size: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
-    .influencer-score {
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: #475569;
-    }
-    
-    /* Feed Item Card */
+    .influencer-score { font-size: 0.8rem; font-weight: 700; color: var(--text-2); }
+
+    /* ============ Feed Cards ============ */
     .auris-feed-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        padding: 18px 22px;
+        margin-bottom: 14px;
+        box-shadow: var(--shadow-1);
         position: relative;
+        transition: box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .card-border-pos { border-left: 5px solid #10b981; }
-    .card-border-neg { border-left: 5px solid #ef4444; }
-    .card-border-neu { border-left: 5px solid #f59e0b; }
-    
+    .auris-feed-card:hover {
+        box-shadow: var(--shadow-2);
+        transform: translateY(-1px);
+    }
+    .card-border-pos { border-left: 4px solid var(--pos); }
+    .card-border-neg { border-left: 4px solid var(--neg); }
+    .card-border-neu { border-left: 4px solid var(--neu); }
+
     .feed-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 8px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
-    .feed-user-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+    .feed-user-info { display: flex; align-items: center; gap: 10px; }
     .feed-avatar-circle {
         width: 38px;
         height: 38px;
         border-radius: 50%;
-        background: #e2e8f0;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 0.88rem;
-        color: #1e293b;
+        font-size: 0.85rem;
+        color: var(--text);
     }
-    .feed-author-name {
-        font-weight: 700;
-        font-size: 0.95rem;
-        color: #0f172a;
-    }
-    .feed-handle {
-        font-size: 0.82rem;
-        color: #64748b;
-        font-weight: 500;
-        margin-left: 4px;
-    }
+    .feed-author-name { font-weight: 700; font-size: 0.94rem; color: var(--text); }
+    .feed-handle { font-size: 0.82rem; color: var(--text-mute); font-weight: 500; margin-left: 4px; }
     .platform-badge {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: #475569;
-        background: #f1f5f9;
-        padding: 2px 8px;
-        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--text-2);
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        padding: 2px 9px;
+        border-radius: 20px;
         margin-left: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
     .feed-time {
         font-size: 0.78rem;
-        color: #94a3b8;
+        color: var(--text-mute);
         display: flex;
         align-items: center;
         gap: 4px;
+        font-variant-numeric: tabular-nums;
     }
-    .feed-body-text {
-        font-size: 0.93rem;
-        color: #334155;
-        line-height: 1.55;
-        margin: 10px 0 12px 0;
-    }
+    .feed-body-text { font-size: 0.93rem; color: #334155; line-height: 1.6; margin: 12px 0 12px 0; }
     .highlight-kw {
         background-color: #fef08a;
         color: #854d0e;
-        padding: 2px 5px;
-        border-radius: 3px;
-        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-weight: 700;
     }
-    .feed-tags-row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
+    .feed-tags-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .feed-pill {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        color: #64748b;
-        padding: 3px 10px;
-        border-radius: 16px;
-        font-size: 0.75rem;
-        font-weight: 600;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        color: var(--text-2);
+        padding: 3px 11px;
+        border-radius: 20px;
+        font-size: 0.74rem;
+        font-weight: 700;
     }
-    .feed-pill-pos { background: #dcfce7; border-color: #bbf7d0; color: #166534; }
-    .feed-pill-neg { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
-    .feed-pill-neu { background: #fef9c3; border-color: #fef08a; color: #854d0e; }
-    .feed-pill-loc { background: #e0f2fe; border-color: #bae6fd; color: #0369a1; }
-    
-    /* Right Filter Panel */
-    .filter-panel-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 16px 18px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    }
+    .feed-pill-pos { background: var(--pos-bg); border-color: var(--pos-border); color: #166534; }
+    .feed-pill-neg { background: var(--neg-bg); border-color: var(--neg-border); color: #991b1b; }
+    .feed-pill-neu { background: var(--neu-bg); border-color: var(--neu-border); color: #92400e; }
+    .feed-pill-loc { background: var(--info-bg); border-color: #bae6fd; color: #0369a1; }
+
+    /* ============ Filter Panel ============ */
     .filter-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #f1f5f9;
-        padding-bottom: 10px;
-        margin-bottom: 14px;
-    }
-    .filter-title {
-        font-weight: 700;
-        font-size: 0.95rem;
-        color: #0f172a;
-    }
-    .filter-total {
-        font-size: 0.8rem;
-        color: #64748b;
-        font-weight: 600;
-    }
-    .sentiment-toggle-box {
-        display: flex;
-        justify-content: space-between;
+        border-bottom: 1px solid var(--border-soft);
+        padding-bottom: 12px;
         margin-bottom: 16px;
-        gap: 8px;
     }
+    .filter-title { font-weight: 800; font-size: 0.96rem; color: var(--text); letter-spacing: -0.01em; }
+    .filter-total {
+        font-size: 0.75rem;
+        color: var(--accent-dark);
+        font-weight: 700;
+        background: var(--accent-light);
+        padding: 3px 10px;
+        border-radius: 20px;
+    }
+    .sentiment-toggle-box { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 8px; }
     .sentiment-item {
         flex: 1;
         text-align: center;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 8px 4px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--r-sm);
+        padding: 10px 4px;
+        transition: transform 0.12s ease;
     }
-    .sentiment-emoji-large {
-        font-size: 1.25rem;
-    }
-    .sentiment-count-text {
-        font-size: 0.82rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-top: 2px;
-    }
-    
+    .sentiment-item:hover { transform: translateY(-2px); }
+    .sentiment-emoji-large { font-size: 1.3rem; }
+    .sentiment-count-text { font-size: 0.85rem; font-weight: 800; color: var(--text); margin-top: 3px; }
+
+    /* ============ Tabs ============ */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
-        border-bottom: 2px solid #e2e8f0;
-        margin-bottom: 18px;
+        gap: 6px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 20px;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 46px;
-        padding: 0px 24px;
-        font-size: 0.95rem;
+        height: 44px;
+        padding: 0px 20px;
+        font-size: 0.92rem;
         font-weight: 700;
-        border-radius: 8px 8px 0 0;
+        border-radius: var(--r-sm) var(--r-sm) 0 0;
+        color: var(--text-2);
     }
+    .stTabs [aria-selected="true"] {
+        color: var(--accent-dark) !important;
+        background: var(--accent-light) !important;
+    }
+
+    /* ============ Misc: buttons, containers, dataframes ============ */
+    .stButton > button { border-radius: var(--r-sm); }
+    [data-testid="stContainer"] { border-radius: var(--r-md) !important; }
+    div[data-testid="stExpander"] { border-radius: var(--r-md); border-color: var(--border) !important; }
+    [data-testid="stMetricValue"] { font-weight: 800; color: var(--text); }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -361,10 +400,10 @@ st.markdown("""
 h_left, h_right = st.columns([3, 2])
 
 with h_left:
-    st.markdown("""<div style="display:flex; align-items:center; gap:8px; padding-top:6px;">
-<span style="font-size:1.6rem; color:#00875a;">⚡</span>
-<span style="font-size:1.4rem; font-weight:800; color:#0f172a;">LUMISOCIAL</span>
-<span style="font-weight:400; color:#64748b; font-size:1.1rem;">| Command Center</span>
+    st.markdown("""<div style="display:flex; align-items:center; gap:10px; padding-top:6px;">
+<span style="font-size:1.5rem; background:linear-gradient(135deg,#0d9488,#0f766e); width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(13,148,136,0.3);">⚡</span>
+<span style="font-size:1.4rem; font-weight:800; color:#0f172a; letter-spacing:-0.02em;">LUMISOCIAL</span>
+<span style="font-weight:500; color:#94a3b8; font-size:1.05rem;">Command Center</span>
 </div>""", unsafe_allow_html=True)
 
 with h_right:
@@ -629,7 +668,7 @@ top_c1, top_c2, top_c3 = st.columns([2, 3, 1])
 with top_c1:
     header_term = report["term"] if report else active_term
     term_display = f"({header_term})" if header_term else "(Awaiting Search Target)"
-    st.markdown(f"<h3 style='margin:0; font-weight:800; color:#0f172a;'>📊 Intelligence Report ▾ <span style='font-size:0.92rem; font-weight:600; color:#00875a;'>{term_display}</span></h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='margin:0; font-weight:800; color:#0f172a; letter-spacing:-0.01em;'>📊 Intelligence Report <span style='font-size:0.92rem; font-weight:700; color:#0d9488;'>{term_display}</span></h3>", unsafe_allow_html=True)
 with top_c2:
     range_label = report["time_range"] if report else time_range
     fetched_label = f" · Last run {report['fetched_at']}" if report else ""
@@ -758,7 +797,7 @@ with tab1:
             cloud_spans = []
             for i, (w, count) in enumerate(word_items[:12]):
                 size_cls = "tag-xl" if i < 2 else ("tag-lg" if i < 5 else ("tag-md" if i < 9 else "tag-sm"))
-                color = "#00875a" if i % 3 == 0 else ("#0284c7" if i % 3 == 1 else "#1e293b")
+                color = "#0d9488" if i % 3 == 0 else ("#0284c7" if i % 3 == 1 else "#1e293b")
                 cloud_spans.append(f"<span class='{size_cls}' style='color:{color};'>{w}</span>")
             
             cloud_html = "<div class='topic-tag-cloud'>" + " ".join(cloud_spans) + "</div>"
@@ -942,7 +981,7 @@ with tab1:
                     fig_hist.add_trace(go.Scatter(
                         x=hist_df["ts"], y=hist_df["positivity_ratio"],
                         mode="lines+markers", name="Positivity %",
-                        line=dict(color="#00875a", width=2),
+                        line=dict(color="#0d9488", width=2),
                     ))
                     fig_hist.update_layout(
                         height=160, margin=dict(l=0, r=0, t=10, b=0),
