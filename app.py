@@ -507,7 +507,16 @@ with st.sidebar:
         menu_options.append("👥 Team Management")
         menu_options.append("⚙️ API Configuration")
         
-    page = st.selectbox("Navigation Desk", menu_options, index=0)
+    # Ensure nav_key is initialized in session state
+    if "nav_key" not in st.session_state:
+        st.session_state["nav_key"] = menu_options[0]
+    
+    if st.session_state["nav_key"] not in menu_options:
+        st.session_state["nav_key"] = menu_options[0]
+        
+    nav_index = menu_options.index(st.session_state["nav_key"])
+    page = st.selectbox("Navigation Desk", menu_options, index=nav_index, key="nav_selectbox")
+    st.session_state["nav_key"] = page
     
     st.divider()
     
@@ -518,6 +527,50 @@ with st.sidebar:
         st.session_state["user_role"] = "ANALYST"
         st.toast("Logged out successfully.")
         st.rerun()
+
+# ----------------- LANGUAGE CLASSIFIER HELPER -----------------
+def get_clean_lang(row):
+    lang_code = row.get("lang") or ""
+    if isinstance(lang_code, str):
+        lang_code = lang_code.lower().strip()
+    
+    code_map = {
+        "en": "English",
+        "mr": "Marathi",
+        "hi": "Hindi",
+        "te": "Telugu",
+        "ta": "Tamil",
+        "ml": "Malayalam",
+        "bn": "Bengali",
+        "gu": "Gujarati",
+        "kn": "Kannada",
+        "pa": "Punjabi",
+    }
+    if lang_code in code_map:
+        return code_map[lang_code]
+        
+    # Estimate language from text
+    text = (row.get("text") or "") + " " + (row.get("summary") or "")
+    text_lower = text.lower()
+    
+    # Devanagari Script (Marathi & Hindi)
+    import re
+    if re.search(r'[\u0900-\u097F]', text):
+        marathi_words = ["आहे", "करून", "झाले", "मराठी", "निवडणूक", "महाराष्ट्र", "त्यांनी", "होता"]
+        if any(w in text_lower for w in marathi_words):
+            return "Marathi"
+        return "Hindi"
+        
+    # Telugu
+    if re.search(r'[\u0c00-\u0c7f]', text):
+        return "Telugu"
+        
+    # Tamil
+    if re.search(r'[\u0b80-\u0bff]', text):
+        return "Tamil"
+        
+    return "English"
+
 
 # ----------------- PAGE ROUTING & RENDERING -----------------
 
@@ -688,6 +741,9 @@ if page == "📊 Monitor Dashboard":
         if df.empty:
             st.warning("No matches found. Try broadening the search keywords or adding alternative spellings.")
         else:
+            # Map/estimate clean languages
+            df["clean_lang"] = df.apply(get_clean_lang, axis=1)
+            
             pos_cnt = stats["positive"]
             neg_cnt = stats["negative"]
             neu_cnt = stats["neutral"]
@@ -771,39 +827,224 @@ if page == "📊 Monitor Dashboard":
                 st.markdown("<div class='topic-tag-cloud'>" + " ".join(cloud_spans) + "</div>", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-            # Live Feed stream (Socioboard Feed Cards)
+            # --- 1. HOT TOPICS STRATEGIC REMEDIATION MATRIX ---
+            st.markdown("#### 🎯 Hot Topics Strategic Remediation Matrix")
+            st.caption("Analyzes the sentiments of public opinion on trending topics, targets remediation strategies to demographics/locations, and estimates impact lift.")
+
+            matrix_html = """
+            <table style="width:100%; border-collapse:collapse; background:rgba(30,41,59,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:8px; overflow:hidden; margin-bottom:20px;">
+                <thead>
+                    <tr style="background:rgba(15,23,42,0.6); border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; color:#94a3b8; font-size:0.75rem; text-transform:uppercase;">
+                        <th style="padding:12px;">Topic / Issue</th>
+                        <th style="padding:12px;">Volume</th>
+                        <th style="padding:12px;">Sentiment Profile</th>
+                        <th style="padding:12px;">Dominant Age Group</th>
+                        <th style="padding:12px;">Top Location</th>
+                        <th style="padding:12px;">Remediation Action Plan</th>
+                        <th style="padding:12px;">Est. Impact Lift</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+
+            active_warnings = []
+
+            for idx_t, (w, count) in enumerate(word_items[:5]):
+                topic_df = df[df["text"].str.contains(w, case=False, na=False)]
+                if topic_df.empty:
+                    continue
+                
+                total = len(topic_df)
+                pos_pct = int((topic_df["sentiment"] == "positive").sum() / total * 100)
+                neg_pct = int((topic_df["sentiment"] == "negative").sum() / total * 100)
+                neu_pct = 100 - pos_pct - neg_pct
+                
+                # Age Group
+                valid_ages = topic_df["age_group"].dropna()
+                age_grp = valid_ages.mode().iat[0] if not valid_ages.empty else "All Ages"
+                
+                # State Location
+                valid_states = topic_df["india_state"].dropna()
+                state_loc = valid_states.mode().iat[0] if not valid_states.empty else "National / Global"
+                
+                # Remediation Action selection
+                if neg_pct > 40:
+                    if state_loc not in ["National", "National / Global"]:
+                        sc_key = "local_issue"
+                        action_desc = "📍 Geo-Fenced Local PR Clarification"
+                        lift_desc = "🟢 +25% Positivity Lift"
+                    elif "18-24" in age_grp or "25-34" in age_grp:
+                        sc_key = "policy_backlash"
+                        action_desc = "📱 Digital Youth Counter-Campaign"
+                        lift_desc = "🟢 +18% Positivity Lift"
+                    else:
+                        sc_key = "fake_news"
+                        action_desc = "📰 Counter-Narrative Fact Sheet Release"
+                        lift_desc = "🟢 +15% Positivity Lift"
+                    active_warnings.append((w, neg_pct, age_grp, state_loc, sc_key))
+                else:
+                    sc_key = None
+                    action_desc = "🛡️ Ongoing Listening (Sentiment Stable)"
+                    lift_desc = "Stable"
+                
+                # Sentiment bar HTML
+                sent_bar = f"""
+                <div style="display:flex; height:8px; border-radius:4px; overflow:hidden; width:120px; background:#475569; margin-bottom:4px;">
+                    <div style="width:{pos_pct}%; background:#10b981;"></div>
+                    <div style="width:{neu_pct}%; background:#64748b;"></div>
+                    <div style="width:{neg_pct}%; background:#ef4444;"></div>
+                </div>
+                <span style="font-size:0.7rem; color:var(--text-mute);">🟢 {pos_pct}% &nbsp;|&nbsp; 🔴 {neg_pct}%</span>
+                """
+                
+                row_html = f"""
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.82rem; color:#e2e8f0;">
+                    <td style="padding:12px; font-weight:700; color:#38bdf8;">🔥 {w}</td>
+                    <td style="padding:12px; font-weight:600;">{total} mentions</td>
+                    <td style="padding:12px;">{sent_bar}</td>
+                    <td style="padding:12px; color:#cbd5e1;">👥 {age_grp}</td>
+                    <td style="padding:12px; color:#cbd5e1;">📍 {state_loc}</td>
+                    <td style="padding:12px; font-weight:600; color:#34d399;">{action_desc}</td>
+                    <td style="padding:12px; font-weight:700; color:#10b981;">{lift_desc}</td>
+                </tr>
+                """
+                matrix_html += row_html
+
+            matrix_html += """
+                </tbody>
+            </table>
+            """
+            st.markdown(matrix_html, unsafe_allow_html=True)
+
+            # Auto-Tab switches notifications
+            if active_warnings:
+                for w, neg_pct, age_grp, state_loc, sc_key in active_warnings:
+                    col_txt, col_act = st.columns([4, 1])
+                    with col_txt:
+                        st.markdown(f"""
+                        <div style="padding:8px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:6px; font-size:0.85rem; color:#fca5a5; margin-top:5px;">
+                            ⚠️ <b>Crisis Warning:</b> Negativity on <b>'{w}'</b> is at <b>{neg_pct}%</b> in location <b>{state_loc}</b> ({age_grp}).
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with col_act:
+                        if st.button(f"⚡ Deploy PR Plan: '{w}'", key=f"remed_btn_{w}", use_container_width=True):
+                            st.session_state["nav_key"] = "🤖 Crisis Remediation"
+                            st.session_state["remediation_selected_scenario"] = sc_key
+                            st.toast(f"Switched tab to Crisis Desk for '{w}'")
+                            st.rerun()
+                st.divider()
+
+            # --- 2. DOUBLE TABS FEED INSTANCES ---
             st.markdown("#### 📬 Social Listening Feed Stream")
             
-            top_feeds = df.sort_values("engagement", ascending=False).head(15)
+            feed_tab1, feed_tab2 = st.tabs(["📱 Social Media Feeds", "📰 News & Press Feeds"])
             
-            for idx, r in top_feeds.iterrows():
-                sent = str(r.get("sentiment", "neutral")).lower()
-                border_cls = "card-border-pos" if sent == "positive" else ("card-border-neg" if sent == "negative" else "card-border-neu")
+            with feed_tab1:
+                # Filter Social Media sources
+                social_platforms = ["twitter", "telegram", "reddit", "bluesky", "youtube", "mastodon", "hackernews"]
+                social_df = df[df["platform"].isin(social_platforms)].sort_values("engagement", ascending=False)
                 
-                author_title = str(r.get("author_name") or r.get("author") or "User")
-                author_handle = str(r.get("author") or "")
-                platform_str = str(r.get("platform", "web"))
-                p_icon = get_platform_icon(platform_str)
-                
-                hl_body = highlight_keywords(str(r.get("text", "")), report["term"])
-                likes = int(r.get("likes", 0))
-                
-                tags_html = f"<span style='background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
-                if r.get("india_state"):
-                    tags_html += f" &nbsp;<span style='background:var(--info-bg); border:1px solid #0284c7; padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#bae6fd;'>📍 {r['india_state']}</span>"
-                    
-                st.markdown(f"""
-                <div class="socio-card {border_cls}">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <div style="font-weight:700; color:white; font-size:0.9rem;">
-                            {p_icon} {author_title} <span style="color:var(--text-mute); font-weight:500; font-size:0.8rem;">@{author_handle}</span>
+                if social_df.empty:
+                    st.info("No social media mentions matching search criteria.")
+                else:
+                    for idx, r in social_df.head(15).iterrows():
+                        sent = str(r.get("sentiment", "neutral")).lower()
+                        border_cls = "card-border-pos" if sent == "positive" else ("card-border-neg" if sent == "negative" else "card-border-neu")
+                        author_title = str(r.get("author_name") or r.get("author") or "User")
+                        author_handle = str(r.get("author") or "")
+                        platform_str = str(r.get("platform", "web"))
+                        p_icon = get_platform_icon(platform_str)
+                        hl_body = highlight_keywords(str(r.get("text", "")), report["term"])
+                        likes = int(r.get("likes", 0))
+                        post_url = r.get("url") or ""
+                        
+                        tags_html = f"<span style='background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
+                        if r.get("india_state"):
+                            tags_html += f" &nbsp;<span style='background:var(--info-bg); border:1px solid #0284c7; padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#bae6fd;'>📍 {r['india_state']}</span>"
+                        
+                        card_content = f"""
+                        <div class="socio-card {border_cls}">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <div style="font-weight:700; color:white; font-size:0.9rem;">
+                                    {p_icon} {author_title} <span style="color:var(--text-mute); font-weight:500; font-size:0.8rem;">@{author_handle}</span>
+                                </div>
+                                <div style="font-size:0.75rem; color:var(--text-mute);">Likes/Engage: {likes}</div>
+                            </div>
+                            <div style="font-size:0.88rem; line-height:1.5; color:var(--text-2); margin-bottom:8px;">{hl_body}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>{tags_html}</div>
+                                {f'<span style="font-size:0.75rem; color:var(--accent); font-weight:700;">🔗 Redirect to Post →</span>' if post_url else ''}
+                            </div>
                         </div>
-                        <div style="font-size:0.75rem; color:var(--text-mute);">Likes: {likes}</div>
-                    </div>
-                    <div style="font-size:0.88rem; line-height:1.5; color:var(--text-2); margin-bottom:8px;">{hl_body}</div>
-                    <div>{tags_html}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                        """
+                        if post_url:
+                            st.markdown(f'<a href="{post_url}" target="_blank" style="text-decoration:none; color:inherit;">{card_content}</a>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(card_content, unsafe_allow_html=True)
+
+            with feed_tab2:
+                # Filter News & Press sources
+                news_platforms = ["indian_news", "news", "gdelt"]
+                news_df = df[df["platform"].isin(news_platforms)].sort_values("engagement", ascending=False)
+                
+                if news_df.empty:
+                    st.info("No news publications or press archives matching search criteria.")
+                else:
+                    # Categories / Regional Filters (Maharashtra, Marathi, English, Hindi, etc.)
+                    f_col1, f_col2 = st.columns(2)
+                    with f_col1:
+                        # Language filter
+                        lang_options = ["All Languages"] + sorted(list(news_df["clean_lang"].dropna().unique()))
+                        selected_lang = st.selectbox("Language Filter", lang_options, key="news_lang_filter")
+                    with f_col2:
+                        # State filter
+                        state_options = ["All Regions"] + sorted(list(news_df["india_state"].dropna().unique()))
+                        selected_state = st.selectbox("State/Region Filter", state_options, key="news_state_filter")
+                    
+                    # Apply Filters
+                    filtered_news_df = news_df.copy()
+                    if selected_lang != "All Languages":
+                        filtered_news_df = filtered_news_df[filtered_news_df["clean_lang"] == selected_lang]
+                    if selected_state != "All Regions":
+                        filtered_news_df = filtered_news_df[filtered_news_df["india_state"] == selected_state]
+                        
+                    if filtered_news_df.empty:
+                        st.info("No news matches the selected language or region filters.")
+                    else:
+                        for idx, r in filtered_news_df.head(15).iterrows():
+                            sent = str(r.get("sentiment", "neutral")).lower()
+                            border_cls = "card-border-pos" if sent == "positive" else ("card-border-neg" if sent == "negative" else "card-border-neu")
+                            author_title = str(r.get("author_name") or r.get("author") or "News Outlet")
+                            platform_str = str(r.get("platform", "news"))
+                            p_icon = get_platform_icon(platform_str)
+                            hl_body = highlight_keywords(str(r.get("text", "")), report["term"])
+                            post_url = r.get("url") or ""
+                            
+                            tags_html = f"<span style='background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
+                            tags_html += f" &nbsp;<span style='background:rgba(0,0,0,0.2); padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#38bdf8;'>🗣️ {r.get('clean_lang','English')}</span>"
+                            if r.get("india_state"):
+                                tags_html += f" &nbsp;<span style='background:var(--info-bg); border:1px solid #0284c7; padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#bae6fd;'>📍 {r['india_state']}</span>"
+                            
+                            card_content = f"""
+                            <div class="socio-card {border_cls}">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                    <div style="font-weight:700; color:white; font-size:0.9rem;">
+                                        {p_icon} {author_title}
+                                    </div>
+                                    <span style="font-size:0.75rem; color:var(--text-mute);">News Publication</span>
+                                </div>
+                                <div style="font-size:0.95rem; font-weight:700; line-height:1.4; color:white; margin-bottom:6px;">{hl_body}</div>
+                                {f'<div style="font-size:0.82rem; color:#cbd5e1; margin-bottom:10px;">{r.get("summary","")}</div>' if r.get("summary") else ''}
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div>{tags_html}</div>
+                                    {f'<span style="font-size:0.75rem; color:var(--accent); font-weight:700;">🔗 Read Article →</span>' if post_url else ''}
+                                </div>
+                            </div>
+                            """
+                            if post_url:
+                                st.markdown(f'<a href="{post_url}" target="_blank" style="text-decoration:none; color:inherit;">{card_content}</a>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(card_content, unsafe_allow_html=True)
                 
             # Report Export Buttons
             st.divider()
@@ -1052,12 +1293,21 @@ elif page == "🤖 Crisis Remediation":
         
         with sim_col1:
             st.markdown("##### Select Actions to Deploy")
-            act_release = st.checkbox("Counter-Narrative Release")
-            act_appeal = st.checkbox("Platform Moderation Appeals")
-            act_video = st.checkbox("Targeted Video Clarification")
-            act_pivot = st.checkbox("Policy Pivot / Focus Group Engagement")
-            act_geofence = st.checkbox("Geo-Fenced PR Release")
-            act_liaison = st.checkbox("Direct Authority Liaison")
+            
+            # Pre-check defaults based on auto-selected scenario from dashboard warnings
+            sel_scenario = st.session_state.get("remediation_selected_scenario")
+            
+            def_release = sel_scenario == "fake_news"
+            def_video = sel_scenario == "policy_backlash"
+            def_pivot = sel_scenario == "policy_backlash"
+            def_geofence = sel_scenario == "local_issue"
+            
+            act_release = st.checkbox("Counter-Narrative Release", value=def_release)
+            act_appeal = st.checkbox("Platform Moderation Appeals", value=False)
+            act_video = st.checkbox("Targeted Video Clarification", value=def_video)
+            act_pivot = st.checkbox("Policy Pivot / Focus Group Engagement", value=def_pivot)
+            act_geofence = st.checkbox("Geo-Fenced PR Release", value=def_geofence)
+            act_liaison = st.checkbox("Direct Authority Liaison", value=False)
             
             selected_actions = []
             if act_release: selected_actions.append("Counter-Narrative Release")
