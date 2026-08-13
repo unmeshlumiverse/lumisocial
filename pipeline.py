@@ -141,11 +141,21 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
     # Surname-only fallback is intentionally removed — it causes false positives
     # (e.g. "thakare" alone matches Shiv Thakare, Ramvijay Thakare, etc.)
     #
-    # YouTube comments are exempt: they're already scoped to videos that
-    # YouTube's own search matched to the query (by relevance/date/view-count),
-    # so requiring a random comment to also literally repeat the person's full
-    # name discards most genuine, relevant comments ("such an inspiring
-    # story!" doesn't say "Amar Thakare" — it doesn't need to).
+    # Some platforms are exempt because their OWN connector already establishes
+    # relevance more reliably than a second headline-only text match here could:
+    #   - youtube: comments are already scoped to videos YouTube's own search
+    #     matched to the query, so requiring a random comment to also literally
+    #     repeat the person's full name discards most genuine, relevant ones
+    #     ("such an inspiring story!" doesn't say "Amar Thakare" — it doesn't
+    #     need to).
+    #   - news (Google News): search_news() already ran a quoted exact-phrase
+    #     query, i.e. Google verified the phrase against the FULL article text,
+    #     not just the (often rewritten/generic) headline we can see. A second
+    #     headline-only check here would re-reject legitimately relevant
+    #     articles whose headline just doesn't happen to repeat the name.
+    #   - gdelt: same reasoning — its query is also a quoted exact-phrase
+    #     full-text search, and we only ever get the headline back, no body.
+    _UPSTREAM_VETTED_PLATFORMS = {"youtube", "news", "gdelt"}
     term_words = [w.lower() for w in term.strip().lstrip("#@").split() if len(w) > 1]
     errors["__raw_total__"] = str(len(rows))  # shown as debug info in UI
 
@@ -153,7 +163,7 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
         term_clean = term.strip().lower()
 
         def _is_relevant(r):
-            if r.get("platform") == "youtube":
+            if r.get("platform") in _UPSTREAM_VETTED_PLATFORMS:
                 return True
             return term_clean in _searchable(r) or all(w in _searchable(r) for w in term_words)
 

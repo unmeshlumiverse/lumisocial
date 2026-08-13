@@ -40,6 +40,15 @@ def _clean_title(title):
     return title.rsplit(" - ", 1)[0] if " - " in title else title
 
 
+def _resolve_source(e):
+    src = getattr(e, "source", None)
+    if src and getattr(src, "title", None):
+        return src.title
+    if " - " in getattr(e, "title", ""):
+        return e.title.rsplit(" - ", 1)[-1]
+    return ""
+
+
 def search_news(query, limit=100, country="IN", lang="en"):
     """
     Search Google News across multiple time windows AND multiple language editions
@@ -48,21 +57,20 @@ def search_news(query, limit=100, country="IN", lang="en"):
     """
     q_clean = query.strip()
     words = [w.lower() for w in q_clean.lstrip("#@").split() if len(w) > 1]
-    surname = words[-1] if words else ""
-    firstname = words[0] if words else ""
 
     # Build both exact-phrase and unquoted variants
     exact_q = f'"{q_clean}"' if len(words) >= 2 and not q_clean.startswith('"') else q_clean
 
-    all_entries = {}  # dedup by link/id
+    all_entries = {}     # dedup by link/id
+    trusted_keys = set()  # entries found via the quoted exact-phrase query
 
     for (ed_country, ed_lang) in EDITIONS:
         for window in TIME_WINDOWS:
-            queries_to_try = [exact_q + window]
+            queries_to_try = [(exact_q + window, True)]
             if exact_q != q_clean:
-                queries_to_try.append(q_clean + window)  # also try unquoted
+                queries_to_try.append((q_clean + window, False))  # also try unquoted
 
-            for q_variant in queries_to_try:
+            for q_variant, is_exact in queries_to_try:
                 url = _feed_url(q_variant, ed_country, ed_lang)
                 try:
                     resp = requests.get(url, timeout=10, headers={"User-Agent": USER_AGENT})
@@ -71,29 +79,38 @@ def search_news(query, limit=100, country="IN", lang="en"):
                     feed = feedparser.parse(resp.content)
                     for e in feed.entries:
                         key = e.get("id") or e.get("link") or ""
-                        if key and key not in all_entries:
+                        if not key:
+                            continue
+                        if key not in all_entries:
                             all_entries[key] = e
+                        # Trust the quoted exact-phrase match as pre-verified relevance
+                        # (Google matched it against the FULL article text, not just the
+                        # headline we get back) — but ONLY for the English edition. Non-
+                        # English editions turned out to loosely fuzzy-match a quoted
+                        # phrase rather than enforce it, letting in unrelated regional
+                        # content; the ASCII-text sanity check below still applies there.
+                        if is_exact and ed_lang == "en":
+                            trusted_keys.add(key)
                 except Exception:
                     continue
 
     posts = []
-    for e in list(all_entries.values()):
+    for key, e in all_entries.items():
         title = _clean_title(e.get("title", ""))
         summary = e.get("summary") or ""
-        searchable = f"{title} {summary}".lower()
+        source = _resolve_source(e)
 
-        # Relevance: BOTH words must be present (exact phrase or all individual words).
-        # Never use surname-only — "Thakare" alone matches Shiv Thakare, Ramvijay Thakare, etc.
-        if len(words) >= 2:
+        # Relevance re-check only for entries NOT already vetted by Google's own
+        # full-text exact-phrase match. And strip the outlet's own name first —
+        # Google's summary boilerplate embeds it (e.g. every Amar Ujala article's
+        # summary literally contains "Amar Ujala"), which falsely satisfies a
+        # first-name match against an unrelated person's article.
+        if key not in trusted_keys and len(words) >= 2:
+            searchable = f"{title} {summary}".lower()
+            if source and len(source) > 2:
+                searchable = searchable.replace(source.lower(), " ")
             if not (q_clean.lower() in searchable or all(w in searchable for w in words)):
                 continue
-
-        source = ""
-        src = getattr(e, "source", None)
-        if src and getattr(src, "title", None):
-            source = src.title
-        elif " - " in getattr(e, "title", ""):
-            source = e.title.rsplit(" - ", 1)[-1]
 
         posts.append({
             "platform": "news",
