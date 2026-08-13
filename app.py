@@ -921,18 +921,20 @@ if page == "📊 Monitor Dashboard":
                 </tbody>
             </table>
             """
-            st.markdown(matrix_html, unsafe_allow_html=True)
+            clean_matrix_html = "\n".join(line.strip() for line in matrix_html.split("\n"))
+            st.markdown(clean_matrix_html, unsafe_allow_html=True)
 
             # Auto-Tab switches notifications
             if active_warnings:
                 for w, neg_pct, age_grp, state_loc, sc_key in active_warnings:
                     col_txt, col_act = st.columns([4, 1])
                     with col_txt:
-                        st.markdown(f"""
+                        warn_html = f"""
                         <div style="padding:8px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:6px; font-size:0.85rem; color:#fca5a5; margin-top:5px;">
                             ⚠️ <b>Crisis Warning:</b> Negativity on <b>'{w}'</b> is at <b>{neg_pct}%</b> in location <b>{state_loc}</b> ({age_grp}).
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                        st.markdown("\n".join(line.strip() for line in warn_html.split("\n")), unsafe_allow_html=True)
                     with col_act:
                         if st.button(f"⚡ Deploy PR Plan: '{w}'", key=f"remed_btn_{w}", use_container_width=True):
                             st.session_state["nav_key"] = "🤖 Crisis Remediation"
