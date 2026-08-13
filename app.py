@@ -497,15 +497,15 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Filter navigation options by User Role
-    menu_options = ["📊 Monitor Dashboard", "🤖 Crisis Remediation"]
+    # Filter navigation options by User Role (Phases and Next Steps)
+    menu_options = ["Phase 1: Executive Monitor Dashboard"]
     
     if st.session_state["user_role"] in ["SUPER_ADMIN", "ORATOR/PR_LEAD"]:
-        menu_options.insert(1, "🎯 Targets Onboarding")
+        menu_options.append("Phase 2: Target Profiles Onboarding")
         
     if st.session_state["user_role"] == "SUPER_ADMIN":
-        menu_options.append("👥 Team Management")
-        menu_options.append("⚙️ API Configuration")
+        menu_options.append("Phase 3: Corporate Team Administration")
+        menu_options.append("Phase 4: Channel API Configurations")
         
     # Ensure nav_key is initialized in session state
     if "nav_key" not in st.session_state:
@@ -582,7 +582,7 @@ def get_clean_lang(row):
 # ----------------- PAGE ROUTING & RENDERING -----------------
 
 # ==================== PAGE 1: MONITOR DASHBOARD ====================
-if page == "📊 Monitor Dashboard":
+if page == "Phase 1: Executive Monitor Dashboard":
     st.markdown("### 📊 Executive Monitoring Dashboard")
     
     # Load targets list from DB
@@ -937,18 +937,28 @@ if page == "📊 Monitor Dashboard":
                         st.markdown("\n".join(line.strip() for line in warn_html.split("\n")), unsafe_allow_html=True)
                     with col_act:
                         if st.button(f"⚡ Deploy PR Plan: '{w}'", key=f"remed_btn_{w}", use_container_width=True):
-                            st.session_state["nav_key"] = "🤖 Crisis Remediation"
+                            st.session_state["sub_tab_key"] = "🤖 Strategic Remediation Desk"
                             st.session_state["remediation_selected_scenario"] = sc_key
-                            st.toast(f"Switched tab to Crisis Desk for '{w}'")
+                            st.toast(f"Switched sub-tab to Remediation Desk for '{w}'")
                             st.rerun()
                 st.divider()
 
-            # --- 2. DOUBLE TABS FEED INSTANCES ---
-            st.markdown("#### 📬 Social Listening Feed Stream")
+            # --- 2. MULTI-VIEW SUB-TABS ON DASHBOARD ---
+            st.markdown("#### 📬 Command Center Operations Desk")
             
-            feed_tab1, feed_tab2 = st.tabs(["📱 Social Media Feeds", "📰 News & Press Feeds"])
+            sub_tab_options = ["📱 Social Media Feeds", "📰 News & Press Feeds", "🤖 Strategic Remediation Desk"]
+            if "sub_tab_key" not in st.session_state:
+                st.session_state["sub_tab_key"] = sub_tab_options[0]
+            if st.session_state["sub_tab_key"] not in sub_tab_options:
+                st.session_state["sub_tab_key"] = sub_tab_options[0]
+                
+            sub_tab_index = sub_tab_options.index(st.session_state["sub_tab_key"])
+            selected_sub_tab = st.radio("Dashboard View Desk", sub_tab_options, index=sub_tab_index, horizontal=True, label_visibility="collapsed")
+            st.session_state["sub_tab_key"] = selected_sub_tab
             
-            with feed_tab1:
+            st.markdown("<br/>", unsafe_allow_html=True)
+            
+            if selected_sub_tab == "📱 Social Media Feeds":
                 # Filter Social Media sources
                 social_platforms = ["twitter", "telegram", "reddit", "bluesky", "youtube", "mastodon", "hackernews"]
                 social_df = df[df["platform"].isin(social_platforms)].sort_values("engagement", ascending=False)
@@ -991,7 +1001,7 @@ if page == "📊 Monitor Dashboard":
                         else:
                             st.markdown(card_content, unsafe_allow_html=True)
 
-            with feed_tab2:
+            elif selected_sub_tab == "📰 News & Press Feeds":
                 # Filter News & Press sources
                 news_platforms = ["indian_news", "news", "gdelt"]
                 news_df = df[df["platform"].isin(news_platforms)].sort_values("engagement", ascending=False)
@@ -1054,6 +1064,148 @@ if page == "📊 Monitor Dashboard":
                                 st.markdown(f'<a href="{post_url}" target="_blank" style="text-decoration:none; color:inherit;">{card_content}</a>', unsafe_allow_html=True)
                             else:
                                 st.markdown(card_content, unsafe_allow_html=True)
+                                
+            elif selected_sub_tab == "🤖 Strategic Remediation Desk":
+                positivity = stats["positivity_ratio"]
+                is_crisis = positivity is not None and positivity < 50.0
+                
+                if is_crisis:
+                    st.markdown(f"""
+                    <div style="background:var(--neg-bg); border:1px solid var(--neg-border); padding:16px; border-radius:8px; margin-bottom:20px; text-align:left;">
+                        <span style="font-size:1.5rem;">🚨</span> &nbsp;<b style="color:#f87171; font-size:1.1rem;">High Crisis Risk: Negativity dominance detected.</b><br/>
+                        Current positivity index is at <b>{positivity}%</b>. The Remediation Matrix below is activated.
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background:var(--pos-bg); border:1px solid var(--pos-border); padding:16px; border-radius:8px; margin-bottom:20px; text-align:left;">
+                        <span style="font-size:1.5rem;">🟢</span> &nbsp;<b style="color:#34d399; font-size:1.1rem;">Stable Sentiment Profile</b><br/>
+                        Current positivity index is at <b>{positivity}%</b>. You can run PR simulations to forecast potential spikes.
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                # Display scenario-remediation cards
+                st.markdown("##### 🛠️ Recommended Action Matrix")
+                
+                sc_col1, sc_col2, sc_col3 = st.columns(3)
+                
+                with sc_col1:
+                    sc = REMEDIATION_SCENARIOS["fake_news"]
+                    st.markdown(f"""
+                    <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between; text-align:left;">
+                        <div>
+                            <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
+                            <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
+                            <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
+                            <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
+                            <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
+                                <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
+                                <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with sc_col2:
+                    sc = REMEDIATION_SCENARIOS["policy_backlash"]
+                    st.markdown(f"""
+                    <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between; text-align:left;">
+                        <div>
+                            <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
+                            <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
+                            <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
+                            <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
+                            <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
+                                <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
+                                <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with sc_col3:
+                    sc = REMEDIATION_SCENARIOS["local_issue"]
+                    st.markdown(f"""
+                    <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between; text-align:left;">
+                        <div>
+                            <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
+                            <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
+                            <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
+                            <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
+                            <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
+                                <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
+                                <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                st.divider()
+                st.markdown("##### 🎯 Interactive PR Simulation Forecast")
+                
+                sim_col1, sim_col2 = st.columns(2)
+                
+                with sim_col1:
+                    st.markdown("###### Select Actions to Deploy")
+                    
+                    # Pre-check defaults based on auto-selected scenario from dashboard warnings
+                    sel_scenario = st.session_state.get("remediation_selected_scenario")
+                    
+                    def_release = sel_scenario == "fake_news"
+                    def_video = sel_scenario == "policy_backlash"
+                    def_pivot = sel_scenario == "policy_backlash"
+                    def_geofence = sel_scenario == "local_issue"
+                    
+                    act_release = st.checkbox("Counter-Narrative Release", value=def_release, key="remed_chk_release")
+                    act_appeal = st.checkbox("Platform Moderation Appeals", value=False, key="remed_chk_appeal")
+                    act_video = st.checkbox("Targeted Video Clarification", value=def_video, key="remed_chk_video")
+                    act_pivot = st.checkbox("Policy Pivot / Focus Group Engagement", value=def_pivot, key="remed_chk_pivot")
+                    act_geofence = st.checkbox("Geo-Fenced PR Release", value=def_geofence, key="remed_chk_geofence")
+                    act_liaison = st.checkbox("Direct Authority Liaison", value=False, key="remed_chk_liaison")
+                    
+                    selected_actions = []
+                    if act_release: selected_actions.append("Counter-Narrative Release")
+                    if act_appeal: selected_actions.append("Platform Moderation Appeals")
+                    if act_video: selected_actions.append("Targeted Video Clarification")
+                    if act_pivot: selected_actions.append("Policy Pivot / Focus Group Engagement")
+                    if act_geofence: selected_actions.append("Geo-Fenced PR Release")
+                    if act_liaison: selected_actions.append("Direct Authority Liaison")
+                    
+                with sim_col2:
+                    st.markdown("###### Forecast Sentiment Result")
+                    
+                    current_metrics = {
+                        "total": stats["total"],
+                        "positive": stats["positive"],
+                        "negative": stats["negative"],
+                        "neutral": stats["neutral"]
+                    }
+                    
+                    sim_res = simulate_remediation(current_metrics, selected_actions)
+                    
+                    sf_col1, sf_col2 = st.columns(2)
+                    with sf_col1:
+                        st.metric("Current Positivity Ratio", f"{positivity}%")
+                        st.metric("Simulated Positivity Ratio", f"{sim_res['positivity_ratio']}%", delta=f"{round(sim_res['positivity_ratio'] - (positivity or 0.0), 1)}%")
+                    with sf_col2:
+                        st.metric("Current Average Score", f"{stats['avg_score']}")
+                        st.metric("Simulated Average Score", f"{sim_res['avg_score']}", delta=f"{round(sim_res['avg_score'] - (stats['avg_score'] or 0.0), 3)}")
+                        
+                    # Draw before/after comparison chart
+                    comparison_df = pd.DataFrame([
+                        {"State": "Current Status", "Sentiment": "Positive", "Count": stats["positive"]},
+                        {"State": "Current Status", "Sentiment": "Negative", "Count": stats["negative"]},
+                        {"State": "Forecast Result", "Sentiment": "Positive", "Count": sim_res["positive"]},
+                        {"State": "Forecast Result", "Sentiment": "Negative", "Count": sim_res["negative"]}
+                    ])
+                    
+                    fig_compare = px.bar(
+                        comparison_df, x="State", y="Count", color="Sentiment",
+                        barmode="group", color_discrete_map={"Positive": "#10b981", "Negative": "#ef4444"},
+                        height=180
+                    )
+                    fig_compare.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
+                    st.plotly_chart(fig_compare, use_container_width=True, config={"displayModeBar": False})
                 
             # Report Export Buttons
             st.divider()
@@ -1085,7 +1237,7 @@ if page == "📊 Monitor Dashboard":
 
 
 # ==================== PAGE 2: TARGETS ONBOARDING ====================
-elif page == "🎯 Targets Onboarding":
+elif page == "Phase 2: Target Profiles Onboarding":
     st.markdown("### 🎯 Tracked Targets & Rules Onboarding")
     
     t_tab1, t_tab2 = st.tabs(["📋 Tracked Entities", "🔎 Social-Analyzer Profile Validator"])
@@ -1208,164 +1360,8 @@ elif page == "🎯 Targets Onboarding":
                     st.warning("Please enter a name.")
 
 
-# ==================== PAGE 3: CRISIS REMEDIATION ====================
-elif page == "🤖 Crisis Remediation":
-    st.markdown("### 🤖 Crisis Remediation & Strategic Action Engine")
-    
-    report = st.session_state.get("last_report")
-    
-    if not report:
-        st.info("Please perform a search scan in the Monitor Dashboard first to load active sentiment metrics.")
-    else:
-        df = report["df"]
-        stats = report["stats"]
-        
-        positivity = stats["positivity_ratio"]
-        is_crisis = positivity is not None and positivity < 50.0
-        
-        if is_crisis:
-            st.markdown(f"""
-            <div style="background:var(--neg-bg); border:1px solid var(--neg-border); padding:16px; border-radius:8px; margin-bottom:20px;">
-                <span style="font-size:1.5rem;">🚨</span> &nbsp;<b style="color:#f87171; font-size:1.1rem;">High Crisis Risk: Negativity dominance detected.</b><br/>
-                Current positivity index is at <b>{positivity}%</b>. The Remediation Matrix below is activated.
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div style="background:var(--pos-bg); border:1px solid var(--pos-border); padding:16px; border-radius:8px; margin-bottom:20px;">
-                <span style="font-size:1.5rem;">🟢</span> &nbsp;<b style="color:#34d399; font-size:1.1rem;">Stable Sentiment Profile</b><br/>
-                Current positivity index is at <b>{positivity}%</b>. You can run PR simulations to forecast potential spikes.
-            </div>
-            """, unsafe_allow_html=True)
-            
-        # Display scenario-remediation cards
-        st.markdown("#### 🛠️ Recommended Action Matrix")
-        
-        sc_col1, sc_col2, sc_col3 = st.columns(3)
-        
-        with sc_col1:
-            sc = REMEDIATION_SCENARIOS["fake_news"]
-            st.markdown(f"""
-            <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between;">
-                <div>
-                    <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
-                    <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
-                    <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
-                    <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
-                    <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
-                        <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
-                        <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
-                    </ul>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with sc_col2:
-            sc = REMEDIATION_SCENARIOS["policy_backlash"]
-            st.markdown(f"""
-            <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between;">
-                <div>
-                    <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
-                    <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
-                    <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
-                    <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
-                    <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
-                        <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
-                        <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
-                    </ul>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with sc_col3:
-            sc = REMEDIATION_SCENARIOS["local_issue"]
-            st.markdown(f"""
-            <div class="socio-card" style="min-height:300px; display:flex; flex-direction:column; justify-content:space-between;">
-                <div>
-                    <div style="font-weight:800; color:white; font-size:1rem;">{sc['title']}</div>
-                    <div style="font-size:0.8rem; color:var(--text-mute); margin-top:5px; line-height:1.4;">{sc['description']}</div>
-                    <hr style="margin:10px 0; border-color:rgba(255,255,255,0.05);"/>
-                    <b style="font-size:0.75rem; text-transform:uppercase; color:var(--accent);">Actions:</b>
-                    <ul style="font-size:0.75rem; padding-left:15px; margin-top:5px; color:var(--text-2);">
-                        <li><b>{sc['actions'][0]['name']}</b>: {sc['actions'][0]['impact']}</li>
-                        <li><b>{sc['actions'][1]['name']}</b>: {sc['actions'][1]['impact']}</li>
-                    </ul>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        st.divider()
-        st.markdown("#### 🎯 Interactive PR Simulation Forecast")
-        st.caption("Check options below to simulate how executing recommended PR strategies would affect forecast index values.")
-        
-        sim_col1, sim_col2 = st.columns(2)
-        
-        with sim_col1:
-            st.markdown("##### Select Actions to Deploy")
-            
-            # Pre-check defaults based on auto-selected scenario from dashboard warnings
-            sel_scenario = st.session_state.get("remediation_selected_scenario")
-            
-            def_release = sel_scenario == "fake_news"
-            def_video = sel_scenario == "policy_backlash"
-            def_pivot = sel_scenario == "policy_backlash"
-            def_geofence = sel_scenario == "local_issue"
-            
-            act_release = st.checkbox("Counter-Narrative Release", value=def_release)
-            act_appeal = st.checkbox("Platform Moderation Appeals", value=False)
-            act_video = st.checkbox("Targeted Video Clarification", value=def_video)
-            act_pivot = st.checkbox("Policy Pivot / Focus Group Engagement", value=def_pivot)
-            act_geofence = st.checkbox("Geo-Fenced PR Release", value=def_geofence)
-            act_liaison = st.checkbox("Direct Authority Liaison", value=False)
-            
-            selected_actions = []
-            if act_release: selected_actions.append("Counter-Narrative Release")
-            if act_appeal: selected_actions.append("Platform Moderation Appeals")
-            if act_video: selected_actions.append("Targeted Video Clarification")
-            if act_pivot: selected_actions.append("Policy Pivot / Focus Group Engagement")
-            if act_geofence: selected_actions.append("Geo-Fenced PR Release")
-            if act_liaison: selected_actions.append("Direct Authority Liaison")
-            
-        with sim_col2:
-            st.markdown("##### Forecast Sentiment Result")
-            
-            # Prepare current count metrics
-            current_metrics = {
-                "total": stats["total"],
-                "positive": stats["positive"],
-                "negative": stats["negative"],
-                "neutral": stats["neutral"]
-            }
-            
-            sim_res = simulate_remediation(current_metrics, selected_actions)
-            
-            sf_col1, sf_col2 = st.columns(2)
-            with sf_col1:
-                st.metric("Current Positivity Ratio", f"{positivity}%")
-                st.metric("Simulated Positivity Ratio", f"{sim_res['positivity_ratio']}%", delta=f"{round(sim_res['positivity_ratio'] - (positivity or 0.0), 1)}%")
-            with sf_col2:
-                st.metric("Current Average Score", f"{stats['avg_score']}")
-                st.metric("Simulated Average Score", f"{sim_res['avg_score']}", delta=f"{round(sim_res['avg_score'] - (stats['avg_score'] or 0.0), 3)}")
-                
-            # Draw before/after comparison chart
-            comparison_df = pd.DataFrame([
-                {"State": "Current Status", "Sentiment": "Positive", "Count": stats["positive"]},
-                {"State": "Current Status", "Sentiment": "Negative", "Count": stats["negative"]},
-                {"State": "Forecast Result", "Sentiment": "Positive", "Count": sim_res["positive"]},
-                {"State": "Forecast Result", "Sentiment": "Negative", "Count": sim_res["negative"]}
-            ])
-            
-            fig_compare = px.bar(
-                comparison_df, x="State", y="Count", color="Sentiment",
-                barmode="group", color_discrete_map={"Positive": "#10b981", "Negative": "#ef4444"},
-                height=180
-            )
-            fig_compare.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
-            st.plotly_chart(fig_compare, use_container_width=True, config={"displayModeBar": False})
-
-
-# ==================== PAGE 4: TEAM MANAGEMENT ====================
-elif page == "👥 Team Management" and st.session_state["user_role"] == "SUPER_ADMIN":
+# ==================== PAGE 3: TEAM MANAGEMENT ====================
+elif page == "Phase 3: Corporate Team Administration" and st.session_state["user_role"] == "SUPER_ADMIN":
     st.markdown("### 👥 Corporate Team & Role Access Control (RBAC)")
     st.caption("Manage analyst accounts and role scopes.")
     
@@ -1419,8 +1415,8 @@ elif page == "👥 Team Management" and st.session_state["user_role"] == "SUPER_
                         st.error("Failed to provision account. Email address might already be registered.")
 
 
-# ==================== PAGE 5: API CONFIGURATION ====================
-elif page == "⚙️ API Configuration" and st.session_state["user_role"] == "SUPER_ADMIN":
+# ==================== PAGE 4: API CONFIGURATION ====================
+elif page == "Phase 4: Channel API Configurations" and st.session_state["user_role"] == "SUPER_ADMIN":
     st.markdown("### ⚙️ API Configuration Desk")
     st.caption("Configure developer keys directly in the active application environment.")
     
