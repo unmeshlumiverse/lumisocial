@@ -149,31 +149,115 @@ st.markdown("""
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 70vh;
+        min-height: 75vh;
+        position: relative;
     }
-    .login-card {
-        background: rgba(30, 41, 59, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: var(--r-lg);
-        padding: 40px;
-        max-width: 480px;
+    .login-bg-glow-1 {
+        position: absolute;
+        width: 250px;
+        height: 250px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--accent) 0%, rgba(13, 148, 136, 0) 70%);
+        top: -20px;
+        left: -40px;
+        opacity: 0.25;
+        filter: blur(60px);
+        animation: floatNebula1 12s infinite alternate ease-in-out;
+        z-index: 1;
+    }
+    .login-bg-glow-2 {
+        position: absolute;
+        width: 320px;
+        height: 320px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--info) 0%, rgba(2, 132, 199, 0) 70%);
+        bottom: -40px;
+        right: -60px;
+        opacity: 0.22;
+        filter: blur(80px);
+        animation: floatNebula2 16s infinite alternate ease-in-out;
+        z-index: 1;
+    }
+    @keyframes floatNebula1 {
+        0% { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(30px, 20px) scale(1.1); }
+    }
+    @keyframes floatNebula2 {
+        0% { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(-40px, -15px) scale(1.05); }
+    }
+    div[data-testid="stForm"] {
+        background: rgba(30, 41, 59, 0.45) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-top: 4px solid var(--accent) !important;
+        border-radius: var(--r-lg) !important;
+        padding: 45px 35px !important;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5) !important;
+        backdrop-filter: blur(25px) !important;
+        max-width: 460px !important;
         width: 100%;
-        box-shadow: var(--shadow-2);
-        backdrop-filter: blur(12px);
-        text-align: center;
-        border-top: 4px solid var(--accent);
+        margin: 0 auto !important;
+        position: relative;
+        z-index: 10;
     }
-    .login-header {
-        font-size: 1.8rem;
-        font-weight: 800;
-        color: white;
-        margin-bottom: 8px;
-        letter-spacing: -0.02em;
+    div[data-testid="stForm"] label {
+        color: #e2e8f0 !important;
+        font-weight: 700 !important;
+        font-size: 0.85rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        margin-bottom: 8px !important;
     }
-    .login-subtitle {
-        font-size: 0.9rem;
-        color: var(--text-mute);
-        margin-bottom: 30px;
+    /* Style input elements and wrapper divs in Streamlit */
+    div[data-testid="stForm"] input[type="text"],
+    div[data-testid="stForm"] input[type="password"],
+    div[data-testid="stForm"] div[data-testid="stTextInput"] > div,
+    div[data-testid="stForm"] [data-testid="stTextInputRootElement"],
+    div[data-testid="stForm"] [data-baseweb="input"],
+    div[data-testid="stForm"] [data-baseweb="base-input"] {
+        background-color: rgba(15, 23, 42, 0.7) !important;
+        border: 1px solid var(--border) !important;
+        color: #ffffff !important;
+        border-radius: var(--r-sm) !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        transition: border-color 0.25s, box-shadow 0.25s !important;
+    }
+    div[data-testid="stForm"] input[type="text"]:focus,
+    div[data-testid="stForm"] input[type="password"]:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-glow) !important;
+    }
+    /* Streamlit forms submit button styling */
+    div[data-testid="stForm"] button,
+    div[data-testid="stForm"] button[data-testid="baseButton-secondary"],
+    div[data-testid="stForm"] [data-baseweb="button"] {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 1rem !important;
+        border: none !important;
+        border-radius: var(--r-sm) !important;
+        padding: 14px 20px !important;
+        box-shadow: 0 4px 15px rgba(13, 148, 136, 0.3) !important;
+        transition: transform 0.15s, box-shadow 0.15s, background 0.15s !important;
+        width: 100% !important;
+        cursor: pointer !important;
+        margin-top: 15px !important;
+    }
+    div[data-testid="stForm"] button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(13, 148, 136, 0.45) !important;
+        background: linear-gradient(135deg, #14b8a6 0%, var(--accent) 100%) !important;
+    }
+    div[data-testid="stForm"] button p {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 1rem !important;
+    }
+    div[data-testid="stForm"] button[type="submit"]:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 24px rgba(13, 148, 136, 0.4) !important;
     }
 
     /* ============ Active Connection Grid ============ */
@@ -308,20 +392,26 @@ if "user_role" not in st.session_state:
     st.session_state["user_role"] = "ANALYST"
 
 if not st.session_state["authenticated"]:
+    # Render background glowing nebulas
+    st.markdown("""
+    <div class="login-bg-glow-1"></div>
+    <div class="login-bg-glow-2"></div>
+    """, unsafe_allow_html=True)
+    
     # Render premium glassmorphic login page
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
     
     col_l, col_login, col_r = st.columns([1, 2, 1])
     with col_login:
-        st.markdown("""
-        <div class="login-card">
-            <span style="font-size:2.5rem;">⚡</span>
-            <div class="login-header">LUMISOCIAL</div>
-            <div class="login-subtitle">Executive Command Center & Social Intelligence Platform</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
         with st.form("login_form"):
+            st.markdown("""
+            <div style="text-align:center; margin-bottom: 25px;">
+                <span style="font-size:2.5rem; filter: drop-shadow(0 0 10px var(--accent-glow));">⚡</span>
+                <h2 style="font-size:2.1rem; font-weight:900; color:white; margin:10px 0 6px 0; letter-spacing:-0.03em; background:linear-gradient(135deg, #ffffff 30%, #a5f3fc 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">LUMISOCIAL</h2>
+                <div style="font-size:0.92rem; color:#94a3b8; font-weight:500;">Executive Command Center & Social Intelligence Platform</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             email = st.text_input("Corporate Email", placeholder="e.g. analyst@company.com")
             password = st.text_input("Access Password", type="password", placeholder="••••••••")
             login_btn = st.form_submit_button("Enter Command Center", use_container_width=True)
@@ -338,9 +428,9 @@ if not st.session_state["authenticated"]:
                     st.error("Invalid credentials. Please verify your email and access keys.")
                     
         st.markdown("""
-        <div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#64748b;">
+        <div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#64748b; position:relative; z-index:10;">
             <b>Default Admin Sandbox Access:</b><br/>
-            Email: <code style="color:#2dd4bf;">admin@lumisocial.com</code> &nbsp;|&nbsp; Password: <code style="color:#2dd4bf;">admin123</code>
+            Email: <code style="color:#2dd4bf; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">admin@lumisocial.com</code> &nbsp;|&nbsp; Password: <code style="color:#2dd4bf; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">admin123</code>
         </div>
         """, unsafe_allow_html=True)
         
