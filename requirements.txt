@@ -8,3 +8,9 @@ feedparser
 plotly
 scikit-learn
 python-dotenv
+BeautifulSoup4
+tld
+termcolor
+langdetect
+lxml
+galeodes
