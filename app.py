@@ -457,6 +457,53 @@ _DASHBOARD_CSS = """
     label[data-testid="stRadioOption"] div:has(+ [data-testid="stMarkdownContainer"]) {
         display: none;
     }
+
+    /* ============ Checkbox / toggle chrome (accent-themed, not Streamlit default) ============ */
+    div[data-testid="stCheckbox"] label > div:has(+ div[data-testid="stWidgetLabel"]) {
+        background: var(--surface) !important;
+        border-color: var(--border-soft) !important;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    div[data-testid="stCheckbox"] label[data-selected="true"] > div:has(+ div[data-testid="stWidgetLabel"]) {
+        background: var(--accent) !important;
+        border-color: var(--accent) !important;
+    }
+    /* Toggle thumb (the inner div only present for st.toggle, not st.checkbox) */
+    div[data-testid="stCheckbox"] label > div:has(+ div[data-testid="stWidgetLabel"]) > div {
+        background: #ffffff !important;
+    }
+    div[data-testid="stCheckbox"] svg polyline {
+        stroke: #ffffff !important;
+    }
+
+    /* ============ Buttons (accent-themed primary, muted secondary) ============ */
+    button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
+        border: none !important;
+        color: #ffffff !important;
+    }
+    button[data-testid="stBaseButton-primary"]:hover {
+        background: linear-gradient(135deg, #14b8a6 0%, var(--accent) 100%) !important;
+    }
+    button[data-testid="stBaseButton-secondary"] {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-2) !important;
+    }
+    button[data-testid="stBaseButton-secondary"]:hover {
+        background: var(--surface-2) !important;
+        border-color: var(--border-soft) !important;
+    }
+
+    /* ============ Select / combobox chrome ============ */
+    div[data-testid="stSelectbox"] [role="group"] {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--r-sm) !important;
+    }
+    div[data-testid="stSelectbox"] input {
+        color: var(--text) !important;
+    }
 </style>
 """
 st.markdown(_DASHBOARD_CSS.replace("__THEME_ROOT__", theme.css_vars()), unsafe_allow_html=True)
