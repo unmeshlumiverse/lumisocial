@@ -18,6 +18,7 @@ load_dotenv()
 
 # App DB and core storage imports
 import storage
+import theme
 import sentiment
 import emotion as emotion_engine
 from keywords import expand_keywords
@@ -85,40 +86,11 @@ st.set_page_config(
 storage.init_db()
 
 # Custom Socioboard-Style CSS design properties
-st.markdown("""
+_DASHBOARD_CSS = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
 
-    :root {
-        --bg: #0f172a;
-        --surface: #1e293b;
-        --surface-2: #334155;
-        --border: #38455a;
-        --border-soft: #475569;
-        --text: #f8fafc;
-        --text-2: #cbd5e1;
-        --text-mute: #94a3b8;
-        --accent: #0d9488;
-        --accent-dark: #0f766e;
-        --accent-light: #ccfbf1;
-        --accent-glow: rgba(13, 148, 136, 0.25);
-        --pos: #10b981;
-        --pos-bg: rgba(16, 185, 129, 0.1);
-        --pos-border: #059669;
-        --neg: #ef4444;
-        --neg-bg: rgba(239, 68, 68, 0.1);
-        --neg-border: #dc2626;
-        --neu: #f59e0b;
-        --neu-bg: rgba(245, 158, 11, 0.1);
-        --neu-border: #d97706;
-        --info: #0284c7;
-        --info-bg: rgba(2, 132, 199, 0.1);
-        --r-sm: 8px;
-        --r-md: 12px;
-        --r-lg: 16px;
-        --shadow-1: 0 4px 10px rgba(0,0,0,0.3);
-        --shadow-2: 0 10px 25px rgba(0,0,0,0.5);
-    }
+    __THEME_ROOT__
 
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -393,8 +365,101 @@ st.markdown("""
     .stButton > button:hover {
         transform: translateY(-1px);
     }
+
+    /* ============ Ported from public-opinion-lens design system ============ */
+    .label-caps {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-mute);
+        margin: 0 0 6px 0;
+    }
+
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text-2);
+    }
+    .pill-pos { border-color: var(--pos-border); background: var(--pos-bg); color: var(--pos); }
+    .pill-neg { border-color: var(--neg-border); background: var(--neg-bg); color: var(--neg); }
+    .pill-neu { border-color: var(--neu-border); background: var(--neu-bg); color: var(--neu); }
+
+    .crit-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        border: 1px solid var(--critical);
+        background: var(--critical-bg);
+        color: var(--critical);
+    }
+
+    .sentiment-bar {
+        display: flex;
+        height: 8px;
+        width: 100%;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--surface-2);
+        margin: 6px 0;
+    }
+    .sentiment-bar > span { height: 100%; }
+    .sentiment-bar .seg-pos { background: var(--pos); }
+    .sentiment-bar .seg-neu { background: var(--neu); }
+    .sentiment-bar .seg-neg { background: var(--neg); }
+
+    /* Phase-switch entrance animation */
+    @keyframes fadeInUp {
+        0% { opacity: 0; transform: translateY(8px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+    .block-container { animation: fadeInUp 0.35s ease; }
+
+    /* Pill-style horizontal radio nav (phase switcher, search-type selector) */
+    div[data-testid="stRadioGroup"] {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    label[data-testid="stRadioOption"] {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 16px !important;
+        margin: 0 !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        cursor: pointer;
+    }
+    label[data-testid="stRadioOption"]:hover {
+        background: var(--surface-2);
+        border-color: var(--border-soft);
+    }
+    label[data-testid="stRadioOption"][data-selected="true"] {
+        background: var(--accent-glow);
+        border-color: var(--accent);
+    }
+    label[data-testid="stRadioOption"][data-selected="true"] p {
+        color: var(--accent) !important;
+        font-weight: 700 !important;
+    }
+    /* Hide the native radio dot (the div immediately before the text container) */
+    label[data-testid="stRadioOption"] div:has(+ [data-testid="stMarkdownContainer"]) {
+        display: none;
+    }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(_DASHBOARD_CSS.replace("__THEME_ROOT__", theme.css_vars()), unsafe_allow_html=True)
 
 # ----------------- SESSION STATE AUTHENTICATION GATING -----------------
 if "authenticated" not in st.session_state:
@@ -515,7 +580,14 @@ with st.sidebar:
         <div style="font-size:0.7rem; color:#2dd4bf; text-transform:uppercase; font-weight:600; margin-top:2px;">Role: {st.session_state["user_role"]}</div>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    # Light / dark mode toggle — session-scoped, defaults to dark.
+    _is_light = st.toggle("☀️ Light mode", value=(theme.get_mode() == "light"), key="ui_theme_toggle")
+    _new_mode = "light" if _is_light else "dark"
+    if _new_mode != theme.get_mode():
+        theme.set_mode(_new_mode)
+        st.rerun()
+
     # Quick Logout Button
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state["authenticated"] = False
@@ -645,7 +717,9 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
             
     with q_col2:
         time_range = st.selectbox("📅 Time Scope", ["All Available Data", "Past 1 Month", "Past 1 Week", "Past 24 Hours"], index=0)
-        limit = st.slider("Max Posts per Connector", 10, 200, 100, step=10)
+        # Connectors now fetch concurrently (pipeline.collect), so wall-clock time
+        # no longer scales with connector count — headroom raised accordingly.
+        limit = st.slider("Max Posts per Connector", 10, 350, 150, step=10)
         use_expand = st.checkbox("🔎 Expand aliases via Wikidata", value=False)
         
     st.divider()
@@ -809,7 +883,7 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                             likes = int(r.get("likes", 0))
                             post_url = r.get("url") or ""
                             
-                            tags_html = f"<span style='background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
+                            tags_html = f"<span style='background:var(--surface-2); color:var(--text-2); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
                             if r.get("india_state"):
                                 tags_html += f" &nbsp;<span style='background:var(--info-bg); border:1px solid #0284c7; padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#bae6fd;'>📍 {r['india_state']}</span>"
                             
@@ -867,7 +941,7 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                                 hl_body = highlight_keywords(str(r.get("text", "")), report["term"])
                                 post_url = r.get("url") or ""
                                 
-                                tags_html = f"<span style='background:rgba(255,255,255,0.06); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
+                                tags_html = f"<span style='background:var(--surface-2); color:var(--text-2); border:1px solid var(--border); padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:700;'>{sent.upper()}</span>"
                                 tags_html += f" &nbsp;<span style='background:rgba(0,0,0,0.2); padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#38bdf8;'>🗣️ {r.get('clean_lang','English')}</span>"
                                 if r.get("india_state"):
                                     tags_html += f" &nbsp;<span style='background:var(--info-bg); border:1px solid #0284c7; padding:2px 8px; border-radius:12px; font-size:0.7rem; color:#bae6fd;'>📍 {r['india_state']}</span>"
@@ -881,7 +955,7 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                                         <span style="font-size:0.75rem; color:var(--text-mute);">News Publication</span>
                                     </div>
                                     <div style="font-size:0.95rem; font-weight:700; line-height:1.4; color:white; margin-bottom:6px;">{hl_body}</div>
-                                    {f'<div style="font-size:0.82rem; color:#cbd5e1; margin-bottom:10px;">{r.get("summary","")}</div>' if r.get("summary") else ''}
+                                    {f'<div style="font-size:0.82rem; color:var(--text-2); margin-bottom:10px;">{r.get("summary","")}</div>' if r.get("summary") else ''}
                                     <div style="display:flex; justify-content:space-between; align-items:center;">
                                         <div>{tags_html}</div>
                                         {f'<span style="font-size:0.75rem; color:var(--accent); font-weight:700;">🔗 Read Article →</span>' if post_url else ''}
@@ -950,7 +1024,8 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=time_counts["time_bin"], y=time_counts["positive"], name="Pos", line=dict(color="#10b981", width=2)))
                     fig.add_trace(go.Scatter(x=time_counts["time_bin"], y=time_counts["negative"], name="Neg", line=dict(color="#ef4444", width=2)))
-                    fig.update_layout(height=180, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor="#334155"))
+                    _pt = theme.plot_theme()
+                    fig.update_layout(height=180, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color=_pt["text"]), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor=_pt["grid"]))
                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                     st.markdown('</div>', unsafe_allow_html=True)
                     
@@ -1035,12 +1110,12 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                     """
                     
                     row_html = f"""
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.82rem; color:#e2e8f0;">
+                    <tr style="border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text);">
                         <td style="padding:12px; font-weight:700; color:#38bdf8;">🔥 {w}</td>
                         <td style="padding:12px; font-weight:600;">{total} mentions</td>
                         <td style="padding:12px;">{sent_bar}</td>
-                        <td style="padding:12px; color:#cbd5e1;">👥 {age_grp}</td>
-                        <td style="padding:12px; color:#cbd5e1;">📍 {state_loc}</td>
+                        <td style="padding:12px; color:var(--text-2);">👥 {age_grp}</td>
+                        <td style="padding:12px; color:var(--text-2);">📍 {state_loc}</td>
                         <td style="padding:12px; font-weight:600; color:#34d399;">{action_desc}</td>
                         <td style="padding:12px; font-weight:700; color:#10b981;">{lift_desc}</td>
                     </tr>
@@ -1212,7 +1287,8 @@ if st.session_state["dashboard_phase"] in ["🧭 Phase 0: Executive Brief", "�
                         barmode="group", color_discrete_map={"Positive": "#10b981", "Negative": "#ef4444"},
                         height=180
                     )
-                    fig_compare.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
+                    _pt = theme.plot_theme()
+                    fig_compare.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color=_pt["text"]), xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
                     st.plotly_chart(fig_compare, use_container_width=True, config={"displayModeBar": False})
                 
             # Report Export Buttons

@@ -27,6 +27,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import storage
+import theme
 from analysis import aggregate_india_state_sentiments, extract_hot_topics
 from demographics import summarize_demographics
 from media_analysis import split_media_vs_public
@@ -34,9 +35,9 @@ from similarity import build_topic_matrix
 from strategy import build_action_plan
 from remediation import REMEDIATION_SCENARIOS
 
-# Shared palette (mirrors the dashboard CSS variables).
+# Shared palette (mirrors the dashboard CSS variables). Semantic colors are
+# theme-invariant; only text/gridline colors follow the active dark/light mode.
 POS, NEG, NEU, ACCENT, INFO = "#10b981", "#ef4444", "#f59e0b", "#0d9488", "#0284c7"
-TEXT = "#e2e8f0"
 
 # Incremented on every brief render so Plotly chart keys are always unique,
 # even if the brief is (defensively) rendered more than once in a script run.
@@ -44,17 +45,18 @@ _RENDER_NONCE = {"v": 0}
 
 
 def _fig_base(fig, height=280, legend=True):
+    pt = theme.plot_theme()
     fig.update_layout(
         height=height,
         margin=dict(l=6, r=6, t=28, b=6),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=TEXT, family="Plus Jakarta Sans"),
+        font=dict(color=pt["text"], family="Plus Jakarta Sans"),
         showlegend=legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
     fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.06)", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=pt["grid"], zeroline=False)
     return fig
 
 

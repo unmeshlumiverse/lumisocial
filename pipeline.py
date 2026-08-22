@@ -8,6 +8,7 @@ dict shape and appending it in `collect`.
 
 import datetime as dt
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
@@ -95,24 +96,37 @@ def collect(term: str, search_type: str, sources: dict, limit: int = 50, expansi
     n_queries = 1 + len(variants)
     per = max(10, limit // n_queries) if variants else limit
 
+    def _fetch_source(name, fetch):
+        """
+        Runs one platform's full query set. Kept sequential *within* a source
+        (one query after another) so we never burst a single API with parallel
+        requests and trip its rate limit — only different platforms (independent
+        services) run concurrently with each other, below.
+        """
+        queries = [build_query(term, search_type, name)]
+        queries += [_shape_variant(v, name) for v in variants]
+        # Dedupe queries (case-insensitive) while preserving order.
+        seen = set()
+        deduped = [q for q in queries if q and not (q.lower() in seen or seen.add(q.lower()))]
+        source_rows = []
+        for q in deduped:
+            source_rows.extend(fetch(q, per))
+        return source_rows
+
     rows = []
     errors = {}
     source_counts = {}
-    for name, fetch in sources.items():
-        try:
-            queries = [build_query(term, search_type, name)]
-            queries += [_shape_variant(v, name) for v in variants]
-            # Dedupe queries (case-insensitive) while preserving order.
-            seen = set()
-            deduped = [q for q in queries if q and not (q.lower() in seen or seen.add(q.lower()))]
-            source_rows = []
-            for q in deduped:
-                source_rows.extend(fetch(q, per))
-            rows.extend(source_rows)
-            source_counts[name] = len(source_rows)
-        except Exception as e:  # noqa: BLE001 - surface, don't crash
-            errors[name] = str(e)
-            source_counts[name] = 0
+    with ThreadPoolExecutor(max_workers=max(1, len(sources))) as pool:
+        future_to_name = {pool.submit(_fetch_source, name, fetch): name for name, fetch in sources.items()}
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
+            try:
+                source_rows = future.result()
+                rows.extend(source_rows)
+                source_counts[name] = len(source_rows)
+            except Exception as e:  # noqa: BLE001 - surface, don't crash
+                errors[name] = str(e)
+                source_counts[name] = 0
     errors["__source_counts__"] = source_counts  # per-connector raw counts, for UI diagnostics
 
     if not rows:
